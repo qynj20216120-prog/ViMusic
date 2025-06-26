@@ -14,47 +14,62 @@ import it.vfsfitvnm.innertube.utils.runCatchingNonCancellable
 import kotlinx.serialization.Serializable
 
 suspend fun Innertube.player(body: PlayerBody) = runCatchingNonCancellable {
+    // Try with updated Android context first
     val response = client.post(player) {
-        setBody(body)
-        mask("playabilityStatus.status,playerConfig.audioConfig,streamingData.adaptiveFormats,videoDetails.videoId")
+        setBody(body.copy(context = Context.DefaultAndroid))
+        mask("playabilityStatus.status,videoDetails.videoId,streamingData.adaptiveFormats,streamingData.hlsManifestUrl,playerConfig.audioConfig")
     }.body<PlayerResponse>()
 
     if (response.playabilityStatus?.status == "OK") {
-        response
-    } else {
-        @Serializable
-        data class AudioStream(
-            val url: String,
-            val bitrate: Long
-        )
+        return@runCatchingNonCancellable response
+    }
 
-        @Serializable
-        data class PipedResponse(
-            val audioStreams: List<AudioStream>
-        )
+    // If Android fails, try iOS context
+    val iOSResponse = client.post(player) {
+        setBody(body.copy(context = Context.DefaultiOS))
+        mask("playabilityStatus.status,videoDetails.videoId,streamingData.adaptiveFormats,streamingData.hlsManifestUrl,playerConfig.audioConfig")
+    }.body<PlayerResponse>()
 
-        val safePlayerResponse = client.post(player) {
-            setBody(
-                body.copy(
-                    context = Context.DefaultAgeRestrictionBypass.copy(
-                        thirdParty = Context.ThirdParty(
-                            embedUrl = "https://www.youtube.com/watch?v=${body.videoId}"
-                        )
-                    ),
-                )
+    if (iOSResponse.playabilityStatus?.status == "OK") {
+        return@runCatchingNonCancellable iOSResponse
+    }
+
+    // Fallback to age restriction bypass if both fail
+    @Serializable
+    data class AudioStream(
+        val url: String,
+        val bitrate: Long
+    )
+
+    @Serializable
+    data class PipedResponse(
+        val audioStreams: List<AudioStream>
+    )
+
+    val safePlayerResponse = client.post(player) {
+        setBody(
+            body.copy(
+                context = Context.DefaultAgeRestrictionBypass.copy(
+                    thirdParty = Context.ThirdParty(
+                        embedUrl = "https://www.youtube.com/watch?v=${body.videoId}"
+                    )
+                ),
             )
-            mask("playabilityStatus.status,playerConfig.audioConfig,streamingData.adaptiveFormats,videoDetails.videoId")
-        }.body<PlayerResponse>()
+        )
+        mask("playabilityStatus.status,videoDetails.videoId,streamingData.adaptiveFormats,streamingData.hlsManifestUrl,playerConfig.audioConfig")
+    }.body<PlayerResponse>()
 
-        if (safePlayerResponse.playabilityStatus?.status != "OK") {
-            return@runCatchingNonCancellable response
-        }
+    if (safePlayerResponse.playabilityStatus?.status == "OK") {
+        return@runCatchingNonCancellable safePlayerResponse
+    }
 
+    // Final fallback to Piped API
+    try {
         val audioStreams = client.get("https://watchapi.whatever.social/streams/${body.videoId}") {
             contentType(ContentType.Application.Json)
         }.body<PipedResponse>().audioStreams
 
-        safePlayerResponse.copy(
+        return@runCatchingNonCancellable safePlayerResponse.copy(
             streamingData = safePlayerResponse.streamingData?.copy(
                 adaptiveFormats = safePlayerResponse.streamingData.adaptiveFormats?.map { adaptiveFormat ->
                     adaptiveFormat.copy(
@@ -63,5 +78,8 @@ suspend fun Innertube.player(body: PlayerBody) = runCatchingNonCancellable {
                 }
             )
         )
+    } catch (e: Exception) {
+        // Return the best response we got, even if it failed
+        return@runCatchingNonCancellable response
     }
 }
