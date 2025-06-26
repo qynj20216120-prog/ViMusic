@@ -259,8 +259,11 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             addAction(Action.previous.value)
         }
 
-        registerReceiver(notificationActionReceiver, filter)
-
+        if (isAtLeastAndroid13) {
+            registerReceiver(notificationActionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(notificationActionReceiver, filter)
+        }
         maybeResumePlaybackWhenDeviceConnected()
     }
 
@@ -619,19 +622,23 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
         }
     }
 
-    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences, key: String) {
+    override fun onSharedPreferenceChanged(
+        sharedPreferences: SharedPreferences,   // <- NOT nullable
+        key: String?                            // <-        nullable
+    ) {
         when (key) {
             persistentQueueKey -> isPersistentQueueEnabled =
                 sharedPreferences.getBoolean(key, isPersistentQueueEnabled)
 
-            volumeNormalizationKey -> maybeNormalizeVolume()
-
+            volumeNormalizationKey            -> maybeNormalizeVolume()
             resumePlaybackWhenDeviceConnectedKey -> maybeResumePlaybackWhenDeviceConnected()
 
             isInvincibilityEnabledKey -> isInvincibilityEnabled =
                 sharedPreferences.getBoolean(key, isInvincibilityEnabled)
 
-            skipSilenceKey -> player.skipSilenceEnabled = sharedPreferences.getBoolean(key, false)
+            skipSilenceKey ->
+                player.skipSilenceEnabled = sharedPreferences.getBoolean(key, false)
+
             isShowingThumbnailInLockscreenKey -> {
                 isShowingThumbnailInLockscreen = sharedPreferences.getBoolean(key, true)
                 maybeShowSongCoverInLockScreen()
@@ -639,9 +646,9 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
             trackLoopEnabledKey, queueLoopEnabledKey -> {
                 player.repeatMode = when {
-                    preferences.getBoolean(trackLoopEnabledKey, false) -> Player.REPEAT_MODE_ONE
-                    preferences.getBoolean(queueLoopEnabledKey, true) -> Player.REPEAT_MODE_ALL
-                    else -> Player.REPEAT_MODE_OFF
+                    preferences.getBoolean(trackLoopEnabledKey,  false) -> Player.REPEAT_MODE_ONE
+                    preferences.getBoolean(queueLoopEnabledKey,  true ) -> Player.REPEAT_MODE_ALL
+                    else                                                -> Player.REPEAT_MODE_OFF
                 }
             }
         }

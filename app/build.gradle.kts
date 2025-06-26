@@ -1,16 +1,16 @@
 plugins {
     id("com.android.application")
     kotlin("android")
-    kotlin("kapt")
+    alias(libs.plugins.ksp) // Only change - using KSP instead of kapt
 }
 
 android {
-    compileSdk = 33
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "it.vfsfitvnm.vimusic"
         minSdk = 21
-        targetSdk = 33
+        targetSdk = 35
         versionCode = 20
         versionName = "0.5.4"
     }
@@ -45,12 +45,13 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
         isCoreLibraryDesugaringEnabled = true
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17 // Keep this modern for Java 21 compat
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     composeOptions {
@@ -59,14 +60,13 @@ android {
 
     kotlinOptions {
         freeCompilerArgs += "-Xcontext-receivers"
-        jvmTarget = "1.8"
+        jvmTarget = "17" // Keep this modern
     }
 }
 
-kapt {
-    arguments {
-        arg("room.schemaLocation", "$projectDir/schemas")
-    }
+// KSP configuration (replaces kapt)
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
@@ -83,11 +83,10 @@ dependencies {
     implementation(libs.compose.coil)
 
     implementation(libs.palette)
-
     implementation(libs.exoplayer)
 
     implementation(libs.room)
-    kapt(libs.room.compiler)
+    ksp(libs.room.compiler) // Using KSP instead of kapt
 
     implementation(projects.innertube)
     implementation(projects.kugou)
