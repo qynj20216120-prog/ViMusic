@@ -1,8 +1,12 @@
-* The Offline (renamed from Cached) playlist is now displayed only if the playlist grid is expanded
-* The Sleep Timer functionality is moved to the playing song menu
-* The search screen text input now correctly handles playlist URLs
-* The 200 song limit problem when opening or importing a YouTube playlist is now fixed
-* The stats for nerds (long press the playing song thumbnail) also display the bitrate
-* The stats for nerds are now correctly updated when skipping songs
-* The song list can now be sorted also by title (other than play time and date)
-* The playlists can now be sorted by name, song count and date
+* Added predictive back (enabled by default on Android 15)
+* Added Auto-sync feature for remote playlists
+* Fixed stability issues related to changes to YouTube Music
+* Fixed inconsistent color palette generation
+* Fine-tuned UI behavior
+* Added Spanish
+* Added Hide explicit songs to settings
+* Updated Chinese translations
+* Added Picture-in-picture mode
+* Added reverb as an audio effect
+* Deduplicated requests to YouTube Music on the album screen
+* Synchronized lyrics now implements the full LRC format

@@ -1,10 +1,8 @@
 package it.vfsfitvnm.vimusic.ui.screens.home
 
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -15,59 +13,50 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.compose.persist.persist
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
 import it.vfsfitvnm.vimusic.R
-import it.vfsfitvnm.vimusic.enums.AlbumSortBy
-import it.vfsfitvnm.vimusic.enums.SortOrder
 import it.vfsfitvnm.vimusic.models.Album
+import it.vfsfitvnm.vimusic.preferences.OrderPreferences
 import it.vfsfitvnm.vimusic.ui.components.themed.FloatingActionsContainerWithScrollToTop
 import it.vfsfitvnm.vimusic.ui.components.themed.Header
 import it.vfsfitvnm.vimusic.ui.components.themed.HeaderIconButton
 import it.vfsfitvnm.vimusic.ui.items.AlbumItem
-import it.vfsfitvnm.vimusic.ui.styling.Dimensions
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.px
-import it.vfsfitvnm.vimusic.utils.albumSortByKey
-import it.vfsfitvnm.vimusic.utils.albumSortOrderKey
-import it.vfsfitvnm.vimusic.utils.rememberPreference
+import it.vfsfitvnm.vimusic.ui.screens.Route
+import it.vfsfitvnm.compose.persist.persist
+import it.vfsfitvnm.core.data.enums.AlbumSortBy
+import it.vfsfitvnm.core.data.enums.SortOrder
+import it.vfsfitvnm.core.ui.Dimensions
+import it.vfsfitvnm.core.ui.LocalAppearance
 
-@ExperimentalFoundationApi
-@ExperimentalAnimationApi
+@Route
 @Composable
 fun HomeAlbums(
     onAlbumClick: (Album) -> Unit,
-    onSearchClick: () -> Unit,
-) {
+    onSearchClick: () -> Unit
+) = with(OrderPreferences) {
     val (colorPalette) = LocalAppearance.current
-
-    var sortBy by rememberPreference(albumSortByKey, AlbumSortBy.DateAdded)
-    var sortOrder by rememberPreference(albumSortOrderKey, SortOrder.Descending)
 
     var items by persist<List<Album>>(tag = "home/albums", emptyList())
 
-    LaunchedEffect(sortBy, sortOrder) {
-        Database.albums(sortBy, sortOrder).collect { items = it }
+    LaunchedEffect(albumSortBy, albumSortOrder) {
+        Database.albums(albumSortBy, albumSortOrder).collect { items = it }
     }
 
-    val thumbnailSizeDp = Dimensions.thumbnails.song * 2
-    val thumbnailSizePx = thumbnailSizeDp.px
-
     val sortOrderIconRotation by animateFloatAsState(
-        targetValue = if (sortOrder == SortOrder.Ascending) 0f else 180f,
-        animationSpec = tween(durationMillis = 400, easing = LinearEasing)
+        targetValue = if (albumSortOrder == SortOrder.Ascending) 0f else 180f,
+        animationSpec = tween(durationMillis = 400, easing = LinearEasing),
+        label = ""
     )
 
     val lazyListState = rememberLazyListState()
@@ -85,36 +74,32 @@ fun HomeAlbums(
                 key = "header",
                 contentType = 0
             ) {
-                Header(title = "Albums") {
+                Header(title = stringResource(R.string.albums)) {
                     HeaderIconButton(
                         icon = R.drawable.calendar,
-                        color = if (sortBy == AlbumSortBy.Year) colorPalette.text else colorPalette.textDisabled,
-                        onClick = { sortBy = AlbumSortBy.Year }
+                        enabled = albumSortBy == AlbumSortBy.Year,
+                        onClick = { albumSortBy = AlbumSortBy.Year }
                     )
 
                     HeaderIconButton(
                         icon = R.drawable.text,
-                        color = if (sortBy == AlbumSortBy.Title) colorPalette.text else colorPalette.textDisabled,
-                        onClick = { sortBy = AlbumSortBy.Title }
+                        enabled = albumSortBy == AlbumSortBy.Title,
+                        onClick = { albumSortBy = AlbumSortBy.Title }
                     )
 
                     HeaderIconButton(
                         icon = R.drawable.time,
-                        color = if (sortBy == AlbumSortBy.DateAdded) colorPalette.text else colorPalette.textDisabled,
-                        onClick = { sortBy = AlbumSortBy.DateAdded }
+                        enabled = albumSortBy == AlbumSortBy.DateAdded,
+                        onClick = { albumSortBy = AlbumSortBy.DateAdded }
                     )
 
-                    Spacer(
-                        modifier = Modifier
-                            .width(2.dp)
-                    )
+                    Spacer(modifier = Modifier.width(2.dp))
 
                     HeaderIconButton(
                         icon = R.drawable.arrow_up,
                         color = colorPalette.text,
-                        onClick = { sortOrder = !sortOrder },
-                        modifier = Modifier
-                            .graphicsLayer { rotationZ = sortOrderIconRotation }
+                        onClick = { albumSortOrder = !albumSortOrder },
+                        modifier = Modifier.graphicsLayer { rotationZ = sortOrderIconRotation }
                     )
                 }
             }
@@ -125,18 +110,17 @@ fun HomeAlbums(
             ) { album ->
                 AlbumItem(
                     album = album,
-                    thumbnailSizePx = thumbnailSizePx,
-                    thumbnailSizeDp = thumbnailSizeDp,
+                    thumbnailSize = Dimensions.thumbnails.album,
                     modifier = Modifier
                         .clickable(onClick = { onAlbumClick(album) })
-                        .animateItemPlacement()
+                        .animateItem()
                 )
             }
         }
 
         FloatingActionsContainerWithScrollToTop(
             lazyListState = lazyListState,
-            iconId = R.drawable.search,
+            icon = R.drawable.search,
             onClick = onSearchClick
         )
     }

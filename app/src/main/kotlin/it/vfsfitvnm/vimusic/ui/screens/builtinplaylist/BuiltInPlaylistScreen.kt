@@ -1,52 +1,72 @@
 package it.vfsfitvnm.vimusic.ui.screens.builtinplaylist
 
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.res.stringResource
+import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.preferences.DataPreferences
+import it.vfsfitvnm.vimusic.preferences.UIStatePreferences
+import it.vfsfitvnm.vimusic.ui.components.themed.Scaffold
+import it.vfsfitvnm.vimusic.ui.screens.GlobalRoutes
+import it.vfsfitvnm.vimusic.ui.screens.Route
 import it.vfsfitvnm.compose.persist.PersistMapCleanup
 import it.vfsfitvnm.compose.routing.RouteHandler
-import it.vfsfitvnm.vimusic.R
-import it.vfsfitvnm.vimusic.enums.BuiltInPlaylist
-import it.vfsfitvnm.vimusic.ui.components.themed.Scaffold
-import it.vfsfitvnm.vimusic.ui.screens.globalRoutes
+import it.vfsfitvnm.core.data.enums.BuiltInPlaylist
 
-@ExperimentalFoundationApi
-@ExperimentalAnimationApi
+object BuiltInPlaylistScreen {
+    internal const val KEY = "builtinplaylist"
+
+    @Composable
+    fun shownPlaylistsAsState(): State<List<BuiltInPlaylist>> {
+        val hiddenPlaylistTabs by UIStatePreferences.mutableTabStateOf(KEY)
+
+        return remember {
+            derivedStateOf {
+                BuiltInPlaylist.entries.filter { it.ordinal.toString() !in hiddenPlaylistTabs }
+            }
+        }
+    }
+}
+
+@Route
 @Composable
 fun BuiltInPlaylistScreen(builtInPlaylist: BuiltInPlaylist) {
     val saveableStateHolder = rememberSaveableStateHolder()
+    val (tabIndex, onTabIndexChanged) = rememberSaveable { mutableIntStateOf(builtInPlaylist.ordinal) }
 
-    val (tabIndex, onTabIndexChanged) = rememberSaveable {
-        mutableStateOf(when (builtInPlaylist) {
-            BuiltInPlaylist.Favorites -> 0
-            BuiltInPlaylist.Offline -> 1
-        })
-    }
+    PersistMapCleanup(prefix = "${builtInPlaylist.name}/")
 
-    PersistMapCleanup(tagPrefix = "${builtInPlaylist.name}/")
+    RouteHandler {
+        GlobalRoutes()
 
-    RouteHandler(listenToGlobalEmitter = true) {
-        globalRoutes()
+        Content {
+            val topTabTitle = stringResource(R.string.format_top_playlist, DataPreferences.topListLength)
 
-        host {
             Scaffold(
+                key = BuiltInPlaylistScreen.KEY,
                 topIconButtonId = R.drawable.chevron_back,
                 onTopIconButtonClick = pop,
                 tabIndex = tabIndex,
-                onTabChanged = onTabIndexChanged,
-                tabColumnContent = { Item ->
-                    Item(0, "Favorites", R.drawable.heart)
-                    Item(1, "Offline", R.drawable.airplane)
-                }
+                onTabChange = onTabIndexChanged,
+                tabColumnContent = {
+                    tab(0, R.string.favorites, R.drawable.heart)
+                    tab(1, R.string.offline, R.drawable.airplane)
+                    tab(2, topTabTitle, R.drawable.trending_up)
+                    tab(3, R.string.history, R.drawable.history)
+                },
+                tabsEditingTitle = stringResource(R.string.playlists)
             ) { currentTabIndex ->
                 saveableStateHolder.SaveableStateProvider(key = currentTabIndex) {
-                    when (currentTabIndex) {
-                        0 -> BuiltInPlaylistSongs(builtInPlaylist = BuiltInPlaylist.Favorites)
-                        1 -> BuiltInPlaylistSongs(builtInPlaylist = BuiltInPlaylist.Offline)
-                    }
+                    BuiltInPlaylist
+                        .entries
+                        .getOrNull(currentTabIndex)
+                        ?.let { BuiltInPlaylistSongs(builtInPlaylist = it) }
                 }
             }
         }

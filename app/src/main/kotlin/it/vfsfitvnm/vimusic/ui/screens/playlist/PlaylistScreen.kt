@@ -1,38 +1,47 @@
 package it.vfsfitvnm.vimusic.ui.screens.playlist
 
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
-import it.vfsfitvnm.compose.persist.PersistMapCleanup
-import it.vfsfitvnm.compose.routing.RouteHandler
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.ui.components.themed.Scaffold
-import it.vfsfitvnm.vimusic.ui.screens.globalRoutes
+import it.vfsfitvnm.vimusic.ui.screens.GlobalRoutes
+import it.vfsfitvnm.vimusic.ui.screens.Route
+import it.vfsfitvnm.compose.persist.PersistMapCleanup
+import it.vfsfitvnm.compose.routing.RouteHandler
 
-@ExperimentalFoundationApi
-@ExperimentalAnimationApi
+@Route
 @Composable
-fun PlaylistScreen(browseId: String) {
+fun PlaylistScreen(
+    browseId: String,
+    params: String?,
+    shouldDedup: Boolean,
+    maxDepth: Int? = null
+) {
     val saveableStateHolder = rememberSaveableStateHolder()
-    PersistMapCleanup(tagPrefix = "playlist/$browseId")
+    PersistMapCleanup(prefix = "playlist/$browseId")
 
-    RouteHandler(listenToGlobalEmitter = true) {
-        globalRoutes()
+    RouteHandler {
+        GlobalRoutes()
 
-        host {
+        Content {
             Scaffold(
+                key = "playlist",
                 topIconButtonId = R.drawable.chevron_back,
                 onTopIconButtonClick = pop,
                 tabIndex = 0,
-                onTabChanged = { },
-                tabColumnContent = { Item ->
-                    Item(0, "Songs", R.drawable.musical_notes)
+                onTabChange = { },
+                tabColumnContent = {
+                    tab(0, R.string.songs, R.drawable.musical_notes)
                 }
             ) { currentTabIndex ->
                 saveableStateHolder.SaveableStateProvider(key = currentTabIndex) {
                     when (currentTabIndex) {
-                        0 -> PlaylistSongList(browseId = browseId)
+                        0 -> PlaylistSongList(
+                            browseId = browseId,
+                            params = params,
+                            maxDepth = maxDepth,
+                            shouldDedup = shouldDedup
+                        )
                     }
                 }
             }

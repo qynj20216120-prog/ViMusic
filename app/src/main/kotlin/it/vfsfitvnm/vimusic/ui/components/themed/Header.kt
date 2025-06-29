@@ -16,84 +16,77 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.vimusic.ui.styling.Dimensions
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.shimmer
+import it.vfsfitvnm.vimusic.ui.components.FadingRow
 import it.vfsfitvnm.vimusic.utils.medium
+import it.vfsfitvnm.core.ui.Dimensions
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.shimmer
 import kotlin.random.Random
 
 @Composable
 fun Header(
     title: String,
     modifier: Modifier = Modifier,
-    actionsContent: @Composable RowScope.() -> Unit = {},
-) {
-    val typography = LocalAppearance.current.typography
-
-    Header(
-        modifier = modifier,
-        titleContent = {
+    actionsContent: @Composable RowScope.() -> Unit = {}
+) = Header(
+    modifier = modifier,
+    titleContent = {
+        FadingRow {
             BasicText(
                 text = title,
-                style = typography.xxl.medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                style = LocalAppearance.current.typography.xxl.medium,
+                maxLines = 1
             )
-        },
-        actionsContent = actionsContent
+        }
+    },
+    actionsContent = actionsContent
+)
+
+@Composable
+fun Header(
+    titleContent: @Composable () -> Unit,
+    actionsContent: @Composable RowScope.() -> Unit,
+    modifier: Modifier = Modifier
+) = Box(
+    contentAlignment = Alignment.CenterEnd,
+    modifier = modifier
+        .padding(horizontal = 16.dp)
+        .height(Dimensions.items.headerHeight)
+        .fillMaxWidth()
+) {
+    titleContent()
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .heightIn(min = 48.dp),
+        content = actionsContent
     )
 }
 
 @Composable
-fun Header(
-    modifier: Modifier = Modifier,
-    titleContent: @Composable () -> Unit,
-    actionsContent: @Composable RowScope.() -> Unit,
-) {
-    Box(
-        contentAlignment = Alignment.CenterEnd,
-        modifier = modifier
-            .padding(horizontal = 16.dp)
-            .height(Dimensions.headerHeight)
-            .fillMaxWidth()
-    ) {
-        titleContent()
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .heightIn(min = 48.dp),
-            content = actionsContent,
-        )
-    }
-}
-
-@Composable
-fun HeaderPlaceholder(
-    modifier: Modifier = Modifier,
+fun HeaderPlaceholder(modifier: Modifier = Modifier) = Box(
+    contentAlignment = Alignment.CenterEnd,
+    modifier = modifier
+        .padding(horizontal = 16.dp)
+        .height(Dimensions.items.headerHeight)
+        .fillMaxWidth()
 ) {
     val (colorPalette, typography) = LocalAppearance.current
+    val text = remember { List(Random.nextInt(4, 16)) { " " }.joinToString(separator = "") }
 
     Box(
-        contentAlignment = Alignment.CenterEnd,
-        modifier = modifier
-            .padding(horizontal = 16.dp)
-            .height(Dimensions.headerHeight)
-            .fillMaxWidth()
+        modifier = Modifier
+            .background(colorPalette.shimmer)
+            .fillMaxWidth(remember { 0.25f + Random.nextFloat() * 0.5f })
     ) {
-        Box(
-            modifier = Modifier
-                .background(colorPalette.shimmer)
-                .fillMaxWidth(remember { 0.25f + Random.nextFloat() * 0.5f })
-        ) {
-            BasicText(
-                text = "",
-                style = typography.xxl.medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        BasicText(
+            text = text,
+            style = typography.xxl.medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

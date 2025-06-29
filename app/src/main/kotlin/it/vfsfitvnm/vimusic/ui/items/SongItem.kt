@@ -1,6 +1,9 @@
 package it.vfsfitvnm.vimusic.ui.items
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
@@ -10,209 +13,305 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
-import coil.compose.AsyncImage
+import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.models.Song
+import it.vfsfitvnm.vimusic.preferences.AppearancePreferences
 import it.vfsfitvnm.vimusic.ui.components.themed.TextPlaceholder
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.shimmer
 import it.vfsfitvnm.vimusic.utils.medium
 import it.vfsfitvnm.vimusic.utils.secondary
 import it.vfsfitvnm.vimusic.utils.semiBold
 import it.vfsfitvnm.vimusic.utils.thumbnail
-import it.vfsfitvnm.innertube.Innertube
-import it.vfsfitvnm.vimusic.models.Song
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.shimmer
+import it.vfsfitvnm.core.ui.utils.px
+import it.vfsfitvnm.core.ui.utils.songBundle
+import it.vfsfitvnm.providers.innertube.Innertube
+import coil3.compose.AsyncImage
 
 @Composable
 fun SongItem(
     song: Innertube.SongItem,
-    thumbnailSizePx: Int,
-    thumbnailSizeDp: Dp,
-    modifier: Modifier = Modifier
-) {
-    SongItem(
-        thumbnailUrl = song.thumbnail?.size(thumbnailSizePx),
-        title = song.info?.name,
-        authors = song.authors?.joinToString("") { it.name ?: "" },
-        duration = song.durationText,
-        thumbnailSizeDp = thumbnailSizeDp,
-        modifier = modifier,
-    )
-}
+    thumbnailSize: Dp,
+    modifier: Modifier = Modifier,
+    showDuration: Boolean = true,
+    clip: Boolean = true,
+    isPlaying: Boolean = false,
+    hideExplicit: Boolean = AppearancePreferences.hideExplicit
+) = SongItem(
+    modifier = modifier,
+    thumbnailUrl = song.thumbnail?.size(thumbnailSize.px),
+    title = song.info?.name,
+    authors = song.authors?.joinToString("") { it.name.orEmpty() },
+    duration = song.durationText,
+    explicit = song.explicit,
+    thumbnailSize = thumbnailSize,
+    showDuration = showDuration,
+    clip = clip,
+    isPlaying = isPlaying,
+    hideExplicit = hideExplicit
+)
 
 @Composable
 fun SongItem(
     song: MediaItem,
-    thumbnailSizeDp: Dp,
-    thumbnailSizePx: Int,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier,
     onThumbnailContent: (@Composable BoxScope.() -> Unit)? = null,
-    trailingContent: (@Composable () -> Unit)? = null
+    trailingContent: (@Composable () -> Unit)? = null,
+    showDuration: Boolean = true,
+    clip: Boolean = true,
+    isPlaying: Boolean = false,
+    hideExplicit: Boolean = AppearancePreferences.hideExplicit
 ) {
+    val extras = remember(song) { song.mediaMetadata.extras?.songBundle }
+
     SongItem(
-        thumbnailUrl = song.mediaMetadata.artworkUri.thumbnail(thumbnailSizePx)?.toString(),
-        title = song.mediaMetadata.title.toString(),
-        authors = song.mediaMetadata.artist.toString(),
-        duration = song.mediaMetadata.extras?.getString("durationText"),
-        thumbnailSizeDp = thumbnailSizeDp,
+        modifier = modifier,
+        thumbnailUrl = song.mediaMetadata.artworkUri.thumbnail(thumbnailSize.px)?.toString(),
+        title = song.mediaMetadata.title?.toString(),
+        authors = song.mediaMetadata.artist?.toString(),
+        duration = extras?.durationText,
+        explicit = extras?.explicit == true,
+        thumbnailSize = thumbnailSize,
         onThumbnailContent = onThumbnailContent,
         trailingContent = trailingContent,
-        modifier = modifier,
+        showDuration = showDuration,
+        clip = clip,
+        isPlaying = isPlaying,
+        hideExplicit = hideExplicit
     )
 }
 
 @Composable
 fun SongItem(
     song: Song,
-    thumbnailSizePx: Int,
-    thumbnailSizeDp: Dp,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier,
-    onThumbnailContent: (@Composable BoxScope.() -> Unit)? = null,
-    trailingContent: (@Composable () -> Unit)? = null
-) {
-    SongItem(
-        thumbnailUrl = song.thumbnailUrl?.thumbnail(thumbnailSizePx),
-        title = song.title,
-        authors = song.artistsText,
-        duration = song.durationText,
-        thumbnailSizeDp = thumbnailSizeDp,
-        onThumbnailContent = onThumbnailContent,
-        trailingContent = trailingContent,
-        modifier = modifier,
-    )
-}
+    index: Int? = null,
+    onThumbnailContent: @Composable (BoxScope.() -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
+    showDuration: Boolean = true,
+    clip: Boolean = true,
+    isPlaying: Boolean = false,
+    hideExplicit: Boolean = AppearancePreferences.hideExplicit
+) = SongItem(
+    modifier = modifier,
+    index = index,
+    thumbnailUrl = song.thumbnailUrl?.thumbnail(thumbnailSize.px),
+    title = song.title,
+    authors = song.artistsText,
+    duration = song.durationText,
+    explicit = song.explicit,
+    thumbnailSize = thumbnailSize,
+    onThumbnailContent = onThumbnailContent,
+    trailingContent = trailingContent,
+    showDuration = showDuration,
+    clip = clip,
+    isPlaying = isPlaying,
+    hideExplicit = hideExplicit
+)
 
 @Composable
-fun SongItem(
+private fun SongItem(
     thumbnailUrl: String?,
     title: String?,
     authors: String?,
     duration: String?,
-    thumbnailSizeDp: Dp,
+    explicit: Boolean,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier,
-    onThumbnailContent: (@Composable BoxScope.() -> Unit)? = null,
-    trailingContent: (@Composable () -> Unit)? = null
+    index: Int? = null,
+    onThumbnailContent: @Composable (BoxScope.() -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
+    showDuration: Boolean = true,
+    clip: Boolean = true,
+    isPlaying: Boolean = false,
+    hideExplicit: Boolean = AppearancePreferences.hideExplicit
 ) {
+    val (colorPalette, typography, _, thumbnailShape) = LocalAppearance.current
+
     SongItem(
         title = title,
         authors = authors,
         duration = duration,
-        thumbnailSizeDp = thumbnailSizeDp,
+        explicit = explicit,
+        thumbnailSize = thumbnailSize,
         thumbnailContent = {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
-                    .clip(LocalAppearance.current.thumbnailShape)
+                    .clip(thumbnailShape)
+                    .background(colorPalette.background1)
                     .fillMaxSize()
-            )
+            ) {
+                AsyncImage(
+                    model = thumbnailUrl,
+                    error = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                if (index != null) {
+                    Box(
+                        modifier = Modifier
+                            .background(color = Color.Black.copy(alpha = 0.75f))
+                            .fillMaxSize()
+                    )
+                    BasicText(
+                        text = "${index + 1}",
+                        style = typography.xs.semiBold.copy(color = Color.White),
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+            }
 
             onThumbnailContent?.invoke(this)
         },
         modifier = modifier,
-        trailingContent = trailingContent
+        trailingContent = trailingContent,
+        showDuration = showDuration,
+        clip = clip,
+        isPlaying = isPlaying,
+        hideExplicit = hideExplicit
     )
 }
 
 @Composable
-fun SongItem(
-    thumbnailContent: @Composable BoxScope.() -> Unit,
+private fun SongItem(
     title: String?,
     authors: String?,
     duration: String?,
-    thumbnailSizeDp: Dp,
+    explicit: Boolean,
+    thumbnailSize: Dp,
+    thumbnailContent: @Composable BoxScope.() -> Unit,
     modifier: Modifier = Modifier,
     trailingContent: @Composable (() -> Unit)? = null,
+    showDuration: Boolean = true,
+    clip: Boolean = true,
+    isPlaying: Boolean = false,
+    hideExplicit: Boolean = AppearancePreferences.hideExplicit
 ) {
-    val (_, typography) = LocalAppearance.current
+    val (colorPalette, typography) = LocalAppearance.current
 
-    ItemContainer(
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isPlaying) colorPalette.background2 else Color.Transparent,
+        label = ""
+    )
+
+    if (!(hideExplicit && explicit)) ItemContainer(
         alternative = false,
-        thumbnailSizeDp = thumbnailSizeDp,
+        thumbnailSize = thumbnailSize,
         modifier = modifier
+            .background(backgroundColor)
+            .let {
+                if (clip) Modifier.clip(LocalAppearance.current.thumbnailShape) then it
+                else it
+            }
     ) {
         Box(
-            modifier = Modifier
-                .size(thumbnailSizeDp)
-        ) {
-            thumbnailContent()
-        }
+            modifier = Modifier.size(thumbnailSize),
+            content = thumbnailContent
+        )
 
         ItemInfoContainer {
             trailingContent?.let {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     BasicText(
-                        text = title ?: "",
+                        text = title.orEmpty(),
                         style = typography.xs.semiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
+                        modifier = Modifier.weight(1f)
                     )
 
                     it()
                 }
             } ?: BasicText(
-                text = title ?: "",
+                text = title.orEmpty(),
                 style = typography.xs.semiBold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                overflow = TextOverflow.Ellipsis
             )
 
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    authors?.let {
+                        BasicText(
+                            text = authors,
+                            style = typography.xs.semiBold.secondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(
+                                weight = 1f,
+                                fill = false
+                            )
+                        )
+                    }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                BasicText(
-                    text = authors ?: "",
-                    style = typography.xs.semiBold.secondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Clip,
-                    modifier = Modifier
-                        .weight(1f)
-                )
+                    if (explicit) Image(
+                        painter = painterResource(R.drawable.explicit),
+                        contentDescription = null,
+                        colorFilter = ColorFilter.tint(colorPalette.text),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
 
-                duration?.let {
+                if (showDuration) duration?.let {
                     BasicText(
                         text = duration,
                         style = typography.xxs.secondary.medium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .padding(top = 4.dp)
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }
         }
-    }
+    } else Unit
 }
 
 @Composable
 fun SongItemPlaceholder(
-    thumbnailSizeDp: Dp,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier
+) = ItemContainer(
+    alternative = false,
+    thumbnailSize = thumbnailSize,
+    modifier = modifier
 ) {
-    val (colorPalette, _, thumbnailShape) = LocalAppearance.current
+    val (colorPalette, _, _, thumbnailShape) = LocalAppearance.current
 
-    ItemContainer(
-        alternative = false,
-        thumbnailSizeDp =thumbnailSizeDp,
-        modifier = modifier
-    ) {
-        Spacer(
-            modifier = Modifier
-                .background(color = colorPalette.shimmer, shape = thumbnailShape)
-                .size(thumbnailSizeDp)
-        )
+    Spacer(
+        modifier = Modifier
+            .background(color = colorPalette.shimmer, shape = thumbnailShape)
+            .size(thumbnailSize)
+    )
 
-        ItemInfoContainer {
-            TextPlaceholder()
-            TextPlaceholder()
-        }
+    ItemInfoContainer {
+        TextPlaceholder()
+        TextPlaceholder()
     }
 }

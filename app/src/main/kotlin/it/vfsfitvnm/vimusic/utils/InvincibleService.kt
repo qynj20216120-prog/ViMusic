@@ -1,6 +1,5 @@
 package it.vfsfitvnm.vimusic.utils
 
-import android.app.Notification
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -9,6 +8,8 @@ import android.content.IntentFilter
 import android.os.Binder
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
+import it.vfsfitvnm.core.ui.utils.isAtLeastAndroid12
 
 // https://stackoverflow.com/q/53502244/16885569
 // I found four ways to make the system not kill the stopped foreground service: e.g. when
@@ -21,7 +22,6 @@ abstract class InvincibleService : Service() {
     protected val handler = Handler(Looper.getMainLooper())
 
     protected abstract val isInvincibilityEnabled: Boolean
-
     protected abstract val notificationId: Int
 
     private var invincibility: Invincibility? = null
@@ -42,9 +42,8 @@ abstract class InvincibleService : Service() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        if (isInvincibilityEnabled && isAllowedToStartForegroundServices) {
+        if (isInvincibilityEnabled && isAllowedToStartForegroundServices)
             invincibility = Invincibility()
-        }
         return true
     }
 
@@ -55,16 +54,15 @@ abstract class InvincibleService : Service() {
     }
 
     protected fun makeInvincible(isInvincible: Boolean = true) {
-        if (isInvincible) {
-            invincibility?.start()
-        } else {
-            invincibility?.stop()
-        }
+        if (isInvincible) invincibility?.start() else invincibility?.stop()
     }
 
     protected abstract fun shouldBeInvincible(): Boolean
 
-    protected abstract fun notification(): Notification?
+    /**
+     * Should strictly be called on the main thread!
+     */
+    protected abstract fun startForeground()
 
     private inner class Invincibility : BroadcastReceiver(), Runnable {
         private var isStarted = false
@@ -73,42 +71,49 @@ abstract class InvincibleService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 Intent.ACTION_SCREEN_ON -> handler.post(this)
-                Intent.ACTION_SCREEN_OFF -> notification()?.let { notification ->
+                Intent.ACTION_SCREEN_OFF -> {
                     handler.removeCallbacks(this)
-                    startForeground(notificationId, notification)
+                    startForeground()
                 }
             }
         }
 
         @Synchronized
         fun start() {
-            if (!isStarted) {
-                isStarted = true
-                handler.postDelayed(this, intervalMs)
-                registerReceiver(this, IntentFilter().apply {
-                    addAction(Intent.ACTION_SCREEN_ON)
-                    addAction(Intent.ACTION_SCREEN_OFF)
-                })
+            if (isStarted) return
+
+            isStarted = true
+            handler.postDelayed(this, intervalMs)
+
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
             }
+            ContextCompat.registerReceiver(
+                /* context  = */ this@InvincibleService,
+                /* receiver = */ this,
+                /* filter   = */ filter,
+                /* flags    = */ ContextCompat.RECEIVER_NOT_EXPORTED
+            )
         }
 
         @Synchronized
         fun stop() {
-            if (isStarted) {
-                handler.removeCallbacks(this)
-                unregisterReceiver(this)
-                isStarted = false
-            }
+            if (!isStarted) return
+
+            handler.removeCallbacks(this)
+            unregisterReceiver(this)
+            isStarted = false
         }
 
         override fun run() {
-            if (shouldBeInvincible() && isAllowedToStartForegroundServices) {
-                notification()?.let { notification ->
-                    startForeground(notificationId, notification)
-                    stopForeground(false)
-                    handler.postDelayed(this, intervalMs)
-                }
-            }
+            if (!shouldBeInvincible() || !isAllowedToStartForegroundServices) return
+
+            startForeground()
+            @Suppress("DEPRECATION")
+            stopForeground(false)
+
+            handler.postDelayed(this, intervalMs)
         }
     }
 }

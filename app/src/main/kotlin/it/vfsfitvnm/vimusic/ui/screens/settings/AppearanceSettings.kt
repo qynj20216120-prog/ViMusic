@@ -1,131 +1,258 @@
 package it.vfsfitvnm.vimusic.ui.screens.settings
 
-import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
-import it.vfsfitvnm.vimusic.enums.ColorPaletteMode
-import it.vfsfitvnm.vimusic.enums.ColorPaletteName
-import it.vfsfitvnm.vimusic.enums.ThumbnailRoundness
-import it.vfsfitvnm.vimusic.ui.components.themed.Header
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.utils.applyFontPaddingKey
-import it.vfsfitvnm.vimusic.utils.colorPaletteModeKey
-import it.vfsfitvnm.vimusic.utils.colorPaletteNameKey
-import it.vfsfitvnm.vimusic.utils.isAtLeastAndroid13
-import it.vfsfitvnm.vimusic.utils.isShowingThumbnailInLockscreenKey
-import it.vfsfitvnm.vimusic.utils.rememberPreference
-import it.vfsfitvnm.vimusic.utils.thumbnailRoundnessKey
-import it.vfsfitvnm.vimusic.utils.useSystemFontKey
+import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.preferences.AppearancePreferences
+import it.vfsfitvnm.vimusic.preferences.PlayerPreferences
+import it.vfsfitvnm.vimusic.ui.screens.Route
+import it.vfsfitvnm.vimusic.utils.currentLocale
+import it.vfsfitvnm.vimusic.utils.findActivity
+import it.vfsfitvnm.vimusic.utils.startLanguagePicker
+import it.vfsfitvnm.core.ui.BuiltInFontFamily
+import it.vfsfitvnm.core.ui.ColorMode
+import it.vfsfitvnm.core.ui.ColorSource
+import it.vfsfitvnm.core.ui.Darkness
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.ThumbnailRoundness
+import it.vfsfitvnm.core.ui.googleFontsAvailable
+import it.vfsfitvnm.core.ui.utils.isAtLeastAndroid13
 
-@ExperimentalAnimationApi
+@Route
 @Composable
-fun AppearanceSettings() {
+fun AppearanceSettings() = with(AppearancePreferences) {
     val (colorPalette) = LocalAppearance.current
+    val context = LocalContext.current
+    val isDark = isSystemInDarkTheme()
 
-    var colorPaletteName by rememberPreference(colorPaletteNameKey, ColorPaletteName.Dynamic)
-    var colorPaletteMode by rememberPreference(colorPaletteModeKey, ColorPaletteMode.System)
-    var thumbnailRoundness by rememberPreference(
-        thumbnailRoundnessKey,
-        ThumbnailRoundness.Light
-    )
-    var useSystemFont by rememberPreference(useSystemFontKey, false)
-    var applyFontPadding by rememberPreference(applyFontPaddingKey, false)
-    var isShowingThumbnailInLockscreen by rememberPreference(
-        isShowingThumbnailInLockscreenKey,
-        false
-    )
-
-    Column(
-        modifier = Modifier
-            .background(colorPalette.background0)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(
-                LocalPlayerAwareWindowInsets.current
-                    .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
-                    .asPaddingValues()
+    SettingsCategoryScreen(title = stringResource(R.string.appearance)) {
+        SettingsGroup(title = stringResource(R.string.colors)) {
+            EnumValueSelectorSettingsEntry(
+                title = stringResource(R.string.color_source),
+                selectedValue = colorSource,
+                onValueSelect = { colorSource = it },
+                valueText = { it.nameLocalized }
             )
-    ) {
-        Header(title = "Appearance")
-
-        SettingsEntryGroupText(title = "COLORS")
-
-        EnumValueSelectorSettingsEntry(
-            title = "Theme",
-            selectedValue = colorPaletteName,
-            onValueSelected = { colorPaletteName = it }
-        )
-
-        EnumValueSelectorSettingsEntry(
-            title = "Theme mode",
-            selectedValue = colorPaletteMode,
-            isEnabled = colorPaletteName != ColorPaletteName.PureBlack,
-            onValueSelected = { colorPaletteMode = it }
-        )
-
-        SettingsGroupSpacer()
-
-        SettingsEntryGroupText(title = "SHAPES")
-
-        EnumValueSelectorSettingsEntry(
-            title = "Thumbnail roundness",
-            selectedValue = thumbnailRoundness,
-            onValueSelected = { thumbnailRoundness = it },
-            trailingContent = {
-                Spacer(
-                    modifier = Modifier
-                        .border(width = 1.dp, color = colorPalette.accent,  shape = thumbnailRoundness.shape())
-                        .background(color = colorPalette.background1, shape = thumbnailRoundness.shape())
-                        .size(36.dp)
+            EnumValueSelectorSettingsEntry(
+                title = stringResource(R.string.color_mode),
+                selectedValue = colorMode,
+                onValueSelect = { colorMode = it },
+                valueText = { it.nameLocalized }
+            )
+            AnimatedVisibility(visible = colorMode == ColorMode.Dark || (colorMode == ColorMode.System && isDark)) {
+                EnumValueSelectorSettingsEntry(
+                    title = stringResource(R.string.darkness),
+                    selectedValue = darkness,
+                    onValueSelect = { darkness = it },
+                    valueText = { it.nameLocalized }
                 )
             }
-        )
+        }
+        SettingsGroup(title = stringResource(R.string.shapes)) {
+            EnumValueSelectorSettingsEntry(
+                title = stringResource(R.string.thumbnail_roundness),
+                selectedValue = thumbnailRoundness,
+                onValueSelect = { thumbnailRoundness = it },
+                trailingContent = {
+                    Spacer(
+                        modifier = Modifier
+                            .border(
+                                width = 1.dp,
+                                color = colorPalette.accent,
+                                shape = thumbnailRoundness.shape
+                            )
+                            .background(
+                                color = colorPalette.background1,
+                                shape = thumbnailRoundness.shape
+                            )
+                            .size(36.dp)
+                    )
+                },
+                valueText = { it.nameLocalized }
+            )
+        }
+        SettingsGroup(title = stringResource(R.string.text)) {
+            if (isAtLeastAndroid13) SettingsEntry(
+                title = stringResource(R.string.language),
+                text = currentLocale()?.displayLanguage
+                    ?: stringResource(R.string.color_source_default),
+                onClick = {
+                    context.findActivity().startLanguagePicker()
+                }
+            )
 
-        SettingsGroupSpacer()
+            if (googleFontsAvailable()) EnumValueSelectorSettingsEntry(
+                title = stringResource(R.string.font),
+                selectedValue = fontFamily,
+                onValueSelect = { fontFamily = it },
+                valueText = {
+                    if (it == BuiltInFontFamily.System) stringResource(R.string.use_system_font) else it.name
+                }
+            ) else SwitchSettingsEntry(
+                title = stringResource(R.string.use_system_font),
+                text = stringResource(R.string.use_system_font_description),
+                isChecked = fontFamily == BuiltInFontFamily.System,
+                onCheckedChange = {
+                    fontFamily = if (it) BuiltInFontFamily.System else BuiltInFontFamily.Poppins
+                }
+            )
 
-        SettingsEntryGroupText(title = "TEXT")
-
-        SwitchSettingEntry(
-            title = "Use system font",
-            text = "Use the font applied by the system",
-            isChecked = useSystemFont,
-            onCheckedChange = { useSystemFont = it }
-        )
-
-        SwitchSettingEntry(
-            title = "Apply font padding",
-            text = "Add spacing around texts",
-            isChecked = applyFontPadding,
-            onCheckedChange = { applyFontPadding = it }
-        )
-
-        if (!isAtLeastAndroid13) {
-            SettingsGroupSpacer()
-
-            SettingsEntryGroupText(title = "LOCKSCREEN")
-
-            SwitchSettingEntry(
-                title = "Show song cover",
-                text = "Use the playing song cover as the lockscreen wallpaper",
+            SwitchSettingsEntry(
+                title = stringResource(R.string.apply_font_padding),
+                text = stringResource(R.string.apply_font_padding_description),
+                isChecked = applyFontPadding,
+                onCheckedChange = { applyFontPadding = it }
+            )
+        }
+        if (!isAtLeastAndroid13) SettingsGroup(title = stringResource(R.string.lockscreen)) {
+            SwitchSettingsEntry(
+                title = stringResource(R.string.show_song_cover),
+                text = stringResource(R.string.show_song_cover_description),
                 isChecked = isShowingThumbnailInLockscreen,
                 onCheckedChange = { isShowingThumbnailInLockscreen = it }
             )
         }
+        SettingsGroup(title = stringResource(R.string.player)) {
+            SwitchSettingsEntry(
+                title = stringResource(R.string.previous_button_while_collapsed),
+                text = stringResource(R.string.previous_button_while_collapsed_description),
+                isChecked = PlayerPreferences.isShowingPrevButtonCollapsed,
+                onCheckedChange = { PlayerPreferences.isShowingPrevButtonCollapsed = it }
+            )
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.swipe_horizontally_to_close),
+                text = stringResource(R.string.swipe_horizontally_to_close_description),
+                isChecked = PlayerPreferences.horizontalSwipeToClose,
+                onCheckedChange = { PlayerPreferences.horizontalSwipeToClose = it }
+            )
+
+            EnumValueSelectorSettingsEntry(
+                title = stringResource(R.string.seek_bar_style),
+                selectedValue = PlayerPreferences.seekBarStyle,
+                onValueSelect = { PlayerPreferences.seekBarStyle = it },
+                valueText = { it.displayName() }
+            )
+
+            AnimatedVisibility(
+                visible = PlayerPreferences.seekBarStyle == PlayerPreferences.SeekBarStyle.Wavy,
+                label = ""
+            ) {
+                EnumValueSelectorSettingsEntry(
+                    title = stringResource(R.string.seek_bar_quality),
+                    selectedValue = PlayerPreferences.wavySeekBarQuality,
+                    onValueSelect = { PlayerPreferences.wavySeekBarQuality = it },
+                    valueText = { it.displayName() }
+                )
+            }
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.swipe_to_remove_item),
+                text = stringResource(R.string.swipe_to_remove_item_description),
+                isChecked = PlayerPreferences.horizontalSwipeToRemoveItem,
+                onCheckedChange = { PlayerPreferences.horizontalSwipeToRemoveItem = it }
+            )
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.lyrics_keep_screen_awake),
+                text = stringResource(R.string.lyrics_keep_screen_awake_description),
+                isChecked = PlayerPreferences.lyricsKeepScreenAwake,
+                onCheckedChange = { PlayerPreferences.lyricsKeepScreenAwake = it }
+            )
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.lyrics_show_system_bars),
+                text = stringResource(R.string.lyrics_show_system_bars_description),
+                isChecked = PlayerPreferences.lyricsShowSystemBars,
+                onCheckedChange = { PlayerPreferences.lyricsShowSystemBars = it }
+            )
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.pip),
+                text = stringResource(R.string.pip_description),
+                isChecked = autoPip,
+                onCheckedChange = { autoPip = it }
+            )
+
+            SwitchSettingsEntry(
+                title = stringResource(R.string.auto_open_player),
+                text = stringResource(R.string.auto_open_player_description),
+                isChecked = openPlayer,
+                onCheckedChange = { openPlayer = it }
+            )
+        }
+        SettingsGroup(title = stringResource(R.string.songs)) {
+            SwitchSettingsEntry(
+                title = stringResource(R.string.swipe_to_hide_song),
+                text = stringResource(R.string.swipe_to_hide_song_description),
+                isChecked = swipeToHideSong,
+                onCheckedChange = { swipeToHideSong = it }
+            )
+            AnimatedVisibility(
+                visible = swipeToHideSong,
+                label = ""
+            ) {
+                SwitchSettingsEntry(
+                    title = stringResource(R.string.swipe_to_hide_song_confirm),
+                    text = stringResource(R.string.swipe_to_hide_song_confirm_description),
+                    isChecked = swipeToHideSongConfirm,
+                    onCheckedChange = { swipeToHideSongConfirm = it }
+                )
+            }
+            SwitchSettingsEntry(
+                title = stringResource(R.string.hide_explicit),
+                text = stringResource(R.string.hide_explicit_description),
+                isChecked = hideExplicit,
+                onCheckedChange = { hideExplicit = it }
+            )
+        }
     }
 }
+
+val ColorSource.nameLocalized
+    @Composable get() = stringResource(
+        when (this) {
+            ColorSource.Default -> R.string.color_source_default
+            ColorSource.Dynamic -> R.string.color_source_dynamic
+            ColorSource.MaterialYou -> R.string.color_source_material_you
+        }
+    )
+
+val ColorMode.nameLocalized
+    @Composable get() = stringResource(
+        when (this) {
+            ColorMode.System -> R.string.color_mode_system
+            ColorMode.Light -> R.string.color_mode_light
+            ColorMode.Dark -> R.string.color_mode_dark
+        }
+    )
+
+val Darkness.nameLocalized
+    @Composable get() = stringResource(
+        when (this) {
+            Darkness.Normal -> R.string.darkness_normal
+            Darkness.AMOLED -> R.string.darkness_amoled
+            Darkness.PureBlack -> R.string.darkness_pureblack
+        }
+    )
+
+val ThumbnailRoundness.nameLocalized
+    @Composable get() = stringResource(
+        when (this) {
+            ThumbnailRoundness.None -> R.string.none
+            ThumbnailRoundness.Light -> R.string.thumbnail_roundness_light
+            ThumbnailRoundness.Medium -> R.string.thumbnail_roundness_medium
+            ThumbnailRoundness.Heavy -> R.string.thumbnail_roundness_heavy
+            ThumbnailRoundness.Heavier -> R.string.thumbnail_roundness_heavier
+            ThumbnailRoundness.Heaviest -> R.string.thumbnail_roundness_heaviest
+        }
+    )

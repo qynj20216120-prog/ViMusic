@@ -1,6 +1,8 @@
 package it.vfsfitvnm.vimusic.ui.screens.player
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -14,62 +16,68 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.vimusic.ui.styling.PureBlackColorPalette
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
 import it.vfsfitvnm.vimusic.utils.center
 import it.vfsfitvnm.vimusic.utils.color
+import it.vfsfitvnm.vimusic.utils.isInPip
 import it.vfsfitvnm.vimusic.utils.medium
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.onOverlay
+import it.vfsfitvnm.core.ui.overlay
 
 @Composable
 fun PlaybackError(
     isDisplayed: Boolean,
-    messageProvider: () -> String,
+    messageProvider: @Composable () -> String,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
-) {
-    val (_, typography) = LocalAppearance.current
+) = Box(modifier = modifier) {
+    val (colorPalette, typography) = LocalAppearance.current
+    val message by rememberUpdatedState(newValue = messageProvider())
+    val pip = isInPip()
 
-    Box {
-        AnimatedVisibility(
-            visible = isDisplayed,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
-            Spacer(
-                modifier = modifier
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                onDismiss()
-                            }
-                        )
-                    }
-                    .fillMaxSize()
-                    .background(Color.Black.copy(0.8f))
-            )
-        }
-
-        AnimatedVisibility(
-            visible = isDisplayed,
-            enter = slideInVertically { -it },
-            exit = slideOutVertically { -it },
+    AnimatedVisibility(
+        visible = isDisplayed,
+        enter = fadeIn(),
+        exit = fadeOut()
+    ) {
+        Spacer(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-        ) {
-            BasicText(
-                text = remember { messageProvider() },
-                style = typography.xs.center.medium.color(PureBlackColorPalette.text),
-                modifier = Modifier
-                    .background(Color.Black.copy(0.4f))
-                    .padding(all = 8.dp)
-                    .fillMaxWidth()
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { onDismiss() })
+                }
+                .fillMaxSize()
+                .background(Color.Black.copy(0.8f))
+        )
+    }
+
+    AnimatedContent(
+        targetState = message.takeIf { isDisplayed },
+        transitionSpec = {
+            ContentTransform(
+                targetContentEnter = slideInVertically { -it },
+                initialContentExit = slideOutVertically { -it },
+                sizeTransform = null
             )
-        }
+        },
+        label = "",
+        modifier = Modifier.fillMaxWidth()
+    ) { currentMessage ->
+        if (currentMessage != null) BasicText(
+            text = currentMessage,
+            style = typography.xs.center.medium.color(colorPalette.onOverlay),
+            modifier = Modifier
+                .background(colorPalette.overlay.copy(alpha = 0.4f))
+                .padding(all = 8.dp)
+                .fillMaxWidth(),
+            maxLines = if (pip) 1 else Int.MAX_VALUE,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

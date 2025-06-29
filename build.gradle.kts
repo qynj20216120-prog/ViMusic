@@ -1,30 +1,38 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
+import io.gitlab.arturbosch.detekt.Detekt
 
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.2.2")
-        classpath(kotlin("gradle-plugin", libs.versions.kotlin.get()))
-    }
+plugins {
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.kotlin.serialization) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.kotlin.parcelize) apply false
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.android.lint) apply false
+    alias(libs.plugins.ksp) apply false
+    alias(libs.plugins.detekt)
 }
 
-tasks.register("clean", Delete::class) {
-    delete(rootProject.layout.buildDirectory)
+val clean by tasks.registering(Delete::class) {
+    delete(rootProject.layout.buildDirectory.asFile)
 }
 
-subprojects {
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            if (project.findProperty("enableComposeCompilerReports") == "true") {
-                arrayOf("reports", "metrics").forEach {
-                    freeCompilerArgs = freeCompilerArgs + listOf(
-                        "-P", "plugin:androidx.compose.compiler.plugins.kotlin:${it}Destination=${project.layout.buildDirectory.get().asFile.absolutePath}/compose_metrics"
-                    )
-                }
-            }
+allprojects {
+    group = "it.vfsfitvnm.vimusic"
+    version = "0.0.1"
+
+    apply(plugin = "io.gitlab.arturbosch.detekt")
+
+    detekt {
+        buildUponDefaultConfig = true
+        allRules = false
+        config.setFrom("$rootDir/detekt.yml")
+    }
+
+    tasks.withType<Detekt>().configureEach {
+        jvmTarget = "22"
+        reports {
+            html.required = true
         }
     }
 }

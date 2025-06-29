@@ -14,15 +14,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.primaryButton
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.surface
 
 @Composable
 fun SecondaryButton(
     onClick: () -> Unit,
     @DrawableRes iconId: Int,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
+    enabled: Boolean = true
 ) {
     val (colorPalette) = LocalAppearance.current
 
@@ -30,7 +30,7 @@ fun SecondaryButton(
         modifier = modifier
             .clip(CircleShape)
             .clickable(enabled = enabled, onClick = onClick)
-            .background(colorPalette.primaryButton)
+            .background(colorPalette.surface)
             .size(48.dp)
     ) {
         Image(

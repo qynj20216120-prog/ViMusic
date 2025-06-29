@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -15,36 +14,36 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import it.vfsfitvnm.vimusic.ui.components.themed.TextPlaceholder
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.onOverlay
-import it.vfsfitvnm.vimusic.ui.styling.overlay
-import it.vfsfitvnm.vimusic.ui.styling.shimmer
 import it.vfsfitvnm.vimusic.utils.color
 import it.vfsfitvnm.vimusic.utils.medium
 import it.vfsfitvnm.vimusic.utils.secondary
 import it.vfsfitvnm.vimusic.utils.semiBold
-import it.vfsfitvnm.innertube.Innertube
+import it.vfsfitvnm.core.ui.Dimensions
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.onOverlay
+import it.vfsfitvnm.core.ui.overlay
+import it.vfsfitvnm.core.ui.shimmer
+import it.vfsfitvnm.core.ui.utils.roundedShape
+import it.vfsfitvnm.providers.innertube.Innertube
+import coil3.compose.AsyncImage
 
 @Composable
 fun VideoItem(
     video: Innertube.VideoItem,
-    thumbnailHeightDp: Dp,
-    thumbnailWidthDp: Dp,
+    thumbnailWidth: Dp,
+    thumbnailHeight: Dp,
     modifier: Modifier = Modifier
-) {
-    VideoItem(
-        thumbnailUrl = video.thumbnail?.url,
-        duration = video.durationText,
-        title = video.info?.name,
-        uploader = video.authors?.joinToString("") { it.name ?: "" },
-        views = video.viewsText,
-        thumbnailHeightDp = thumbnailHeightDp,
-        thumbnailWidthDp = thumbnailWidthDp,
-        modifier = modifier
-    )
-}
+) = VideoItem(
+    thumbnailUrl = video.thumbnail?.url,
+    duration = video.durationText,
+    title = video.info?.name,
+    uploader = video.authors?.joinToString("") { it.name.orEmpty() },
+    views = video.viewsText,
+    thumbnailWidth = thumbnailWidth,
+    thumbnailHeight = thumbnailHeight,
+    modifier = modifier
+)
 
 @Composable
 fun VideoItem(
@@ -53,97 +52,93 @@ fun VideoItem(
     title: String?,
     uploader: String?,
     views: String?,
-    thumbnailHeightDp: Dp,
-    thumbnailWidthDp: Dp,
+    thumbnailWidth: Dp,
+    thumbnailHeight: Dp,
     modifier: Modifier = Modifier
+) = ItemContainer(
+    alternative = false,
+    thumbnailSize = 0.dp,
+    modifier = Modifier.clip(LocalAppearance.current.thumbnailShape) then modifier
 ) {
-    val (colorPalette, typography, thumbnailShape) = LocalAppearance.current
+    val (colorPalette, typography, thumbnailShapeCorners) = LocalAppearance.current
 
-    ItemContainer(
-        alternative = false,
-        thumbnailSizeDp = 0.dp,
-        modifier = modifier
-    ) {
-        Box {
-            AsyncImage(
-                model = thumbnailUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .clip(thumbnailShape)
-                    .size(width = thumbnailWidthDp, height = thumbnailHeightDp)
-            )
+    Box {
+        AsyncImage(
+            model = thumbnailUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .clip(thumbnailShapeCorners.roundedShape)
+                .size(width = thumbnailWidth, height = thumbnailHeight)
+        )
 
-            duration?.let {
-                BasicText(
-                    text = duration,
-                    style = typography.xxs.medium.color(colorPalette.onOverlay),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(all = 4.dp)
-                        .background(color = colorPalette.overlay, shape = RoundedCornerShape(2.dp))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .align(Alignment.BottomEnd)
-                )
-            }
-        }
-
-        ItemInfoContainer {
+        duration?.let {
             BasicText(
-                text = title ?: "",
-                style = typography.xs.semiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-
-            BasicText(
-                text = uploader ?: "",
-                style = typography.xs.semiBold.secondary,
+                text = duration,
+                style = typography.xxs.medium.color(colorPalette.onOverlay),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(all = Dimensions.items.gap)
+                    .background(
+                        color = colorPalette.overlay,
+                        shape = (thumbnailShapeCorners - Dimensions.items.gap).coerceAtLeast(0.dp).roundedShape
+                    )
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    .align(Alignment.BottomEnd)
             )
+        }
+    }
 
-            views?.let {
-                BasicText(
-                    text = views,
-                    style = typography.xxs.medium.secondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                )
-            }
+    ItemInfoContainer {
+        BasicText(
+            text = title.orEmpty(),
+            style = typography.xs.semiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        BasicText(
+            text = uploader.orEmpty(),
+            style = typography.xs.semiBold.secondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        views?.let {
+            BasicText(
+                text = views,
+                style = typography.xxs.medium.secondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp)
+            )
         }
     }
 }
 
 @Composable
 fun VideoItemPlaceholder(
-    thumbnailHeightDp: Dp,
-    thumbnailWidthDp: Dp,
+    thumbnailWidth: Dp,
+    thumbnailHeight: Dp,
     modifier: Modifier = Modifier
+) = ItemContainer(
+    alternative = false,
+    thumbnailSize = 0.dp,
+    modifier = modifier
 ) {
-    val (colorPalette, _, thumbnailShape) = LocalAppearance.current
+    val colorPalette = LocalAppearance.current.colorPalette
+    val thumbnailShape = LocalAppearance.current.thumbnailShape
 
-    ItemContainer(
-        alternative = false,
-        thumbnailSizeDp = 0.dp,
-        modifier = modifier
-    ) {
-        Spacer(
-            modifier = Modifier
-                .background(color = colorPalette.shimmer, shape = thumbnailShape)
-                .size(width = thumbnailWidthDp, height = thumbnailHeightDp)
-        )
+    Spacer(
+        modifier = Modifier
+            .background(color = colorPalette.shimmer, shape = thumbnailShape)
+            .size(width = thumbnailWidth, height = thumbnailHeight)
+    )
 
-        ItemInfoContainer {
-            TextPlaceholder()
-            TextPlaceholder()
-            TextPlaceholder(
-                modifier = Modifier
-                    .padding(top = 8.dp)
-            )
-        }
+    ItemInfoContainer {
+        TextPlaceholder()
+        TextPlaceholder()
+        TextPlaceholder(modifier = Modifier.padding(top = 8.dp))
     }
 }

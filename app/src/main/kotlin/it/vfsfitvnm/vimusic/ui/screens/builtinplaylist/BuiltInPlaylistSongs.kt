@@ -1,6 +1,5 @@
 package it.vfsfitvnm.vimusic.ui.screens.builtinplaylist
 
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -17,73 +16,111 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.compose.persist.persistList
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
 import it.vfsfitvnm.vimusic.R
-import it.vfsfitvnm.vimusic.enums.BuiltInPlaylist
 import it.vfsfitvnm.vimusic.models.Song
-import it.vfsfitvnm.vimusic.models.SongWithContentLength
+import it.vfsfitvnm.vimusic.preferences.DataPreferences
 import it.vfsfitvnm.vimusic.ui.components.LocalMenuState
 import it.vfsfitvnm.vimusic.ui.components.themed.FloatingActionsContainerWithScrollToTop
 import it.vfsfitvnm.vimusic.ui.components.themed.Header
 import it.vfsfitvnm.vimusic.ui.components.themed.InHistoryMediaItemMenu
 import it.vfsfitvnm.vimusic.ui.components.themed.NonQueuedMediaItemMenu
 import it.vfsfitvnm.vimusic.ui.components.themed.SecondaryTextButton
+import it.vfsfitvnm.vimusic.ui.components.themed.ValueSelectorDialog
 import it.vfsfitvnm.vimusic.ui.items.SongItem
-import it.vfsfitvnm.vimusic.ui.styling.Dimensions
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.px
+import it.vfsfitvnm.vimusic.ui.screens.home.HeaderSongSortBy
+import it.vfsfitvnm.vimusic.utils.PlaylistDownloadIcon
 import it.vfsfitvnm.vimusic.utils.asMediaItem
 import it.vfsfitvnm.vimusic.utils.enqueue
 import it.vfsfitvnm.vimusic.utils.forcePlayAtIndex
 import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.flowOn
+import it.vfsfitvnm.vimusic.utils.playingSong
+import it.vfsfitvnm.compose.persist.persistList
+import it.vfsfitvnm.core.data.enums.BuiltInPlaylist
+import it.vfsfitvnm.core.data.enums.SongSortBy
+import it.vfsfitvnm.core.data.enums.SortOrder
+import it.vfsfitvnm.core.ui.Dimensions
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.utils.enumSaver
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.cancellable
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 
-@ExperimentalFoundationApi
-@ExperimentalAnimationApi
+@OptIn(ExperimentalFoundationApi::class, ExperimentalCoroutinesApi::class)
 @Composable
-fun BuiltInPlaylistSongs(builtInPlaylist: BuiltInPlaylist) {
+fun BuiltInPlaylistSongs(
+    builtInPlaylist: BuiltInPlaylist,
+    modifier: Modifier = Modifier
+) = with(DataPreferences) {
     val (colorPalette) = LocalAppearance.current
     val binder = LocalPlayerServiceBinder.current
     val menuState = LocalMenuState.current
 
     var songs by persistList<Song>("${builtInPlaylist.name}/songs")
 
-    LaunchedEffect(Unit) {
+    var sortBy by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SongSortBy.DateAdded) }
+    var sortOrder by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SortOrder.Descending) }
+
+    LaunchedEffect(binder, sortBy, sortOrder) {
         when (builtInPlaylist) {
-            BuiltInPlaylist.Favorites -> Database
-                .favorites()
+            BuiltInPlaylist.Favorites -> Database.favorites(
+                sortBy = sortBy,
+                sortOrder = sortOrder
+            )
 
-            BuiltInPlaylist.Offline -> Database
-                .songsWithContentLength()
-                .flowOn(Dispatchers.IO)
-                .map { songs ->
-                    songs.filter { song ->
-                        song.contentLength?.let {
-                            binder?.cache?.isCached(song.song.id, 0, song.contentLength)
-                        } ?: false
-                    }.map(SongWithContentLength::song)
-                }
-        }.collect { songs = it }
+            BuiltInPlaylist.Offline ->
+                Database
+                    .songsWithContentLength(
+                        sortBy = sortBy,
+                        sortOrder = sortOrder
+                    )
+                    .map { songs ->
+                        songs.filter { binder?.isCached(it) ?: false }.map { it.song }
+                    }
+
+            BuiltInPlaylist.Top -> combine(
+                flow = topListPeriodProperty.stateFlow,
+                flow2 = topListLengthProperty.stateFlow
+            ) { period, length -> period to length }.flatMapLatest { (period, length) ->
+                if (period.duration == null) Database
+                    .songsByPlayTimeDesc(limit = length)
+                    .distinctUntilChanged()
+                    .cancellable()
+                else Database
+                    .trending(
+                        limit = length,
+                        period = period.duration.inWholeMilliseconds
+                    )
+                    .distinctUntilChanged()
+                    .cancellable()
+            }
+
+            BuiltInPlaylist.History -> Database.history()
+        }.collect { songs = it.toImmutableList() }
     }
-
-    val thumbnailSizeDp = Dimensions.thumbnails.song
-    val thumbnailSize = thumbnailSizeDp.px
 
     val lazyListState = rememberLazyListState()
 
-    Box {
+    val (currentMediaId, playing) = playingSong(binder)
+
+    Box(modifier = modifier) {
         LazyColumn(
             state = lazyListState,
             contentPadding = LocalPlayerAwareWindowInsets.current
-                .only(WindowInsetsSides.Vertical + WindowInsetsSides.End).asPaddingValues(),
+                .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
+                .asPaddingValues(),
             modifier = Modifier
                 .background(colorPalette.background0)
                 .fillMaxSize()
@@ -94,48 +131,81 @@ fun BuiltInPlaylistSongs(builtInPlaylist: BuiltInPlaylist) {
             ) {
                 Header(
                     title = when (builtInPlaylist) {
-                        BuiltInPlaylist.Favorites -> "Favorites"
-                        BuiltInPlaylist.Offline -> "Offline"
+                        BuiltInPlaylist.Favorites -> stringResource(R.string.favorites)
+                        BuiltInPlaylist.Offline -> stringResource(R.string.offline)
+                        BuiltInPlaylist.Top -> stringResource(
+                            R.string.format_my_top_playlist,
+                            topListLength
+                        )
+
+                        BuiltInPlaylist.History -> stringResource(R.string.history)
                     },
-                    modifier = Modifier
-                        .padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp)
                 ) {
                     SecondaryTextButton(
-                        text = "Enqueue",
+                        text = stringResource(R.string.enqueue),
                         enabled = songs.isNotEmpty(),
                         onClick = {
                             binder?.player?.enqueue(songs.map(Song::asMediaItem))
                         }
                     )
 
-                    Spacer(
-                        modifier = Modifier
-                            .weight(1f)
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    if (builtInPlaylist != BuiltInPlaylist.Offline) PlaylistDownloadIcon(
+                        songs = songs.map(Song::asMediaItem).toImmutableList()
                     )
+
+                    if (builtInPlaylist.sortable) HeaderSongSortBy(
+                        sortBy = sortBy,
+                        setSortBy = { sortBy = it },
+                        sortOrder = sortOrder,
+                        setSortOrder = { sortOrder = it }
+                    )
+
+                    if (builtInPlaylist == BuiltInPlaylist.Top) {
+                        var dialogShowing by rememberSaveable { mutableStateOf(false) }
+
+                        SecondaryTextButton(
+                            text = topListPeriod.displayName(),
+                            onClick = { dialogShowing = true }
+                        )
+
+                        if (dialogShowing) ValueSelectorDialog(
+                            onDismiss = { dialogShowing = false },
+                            title = stringResource(
+                                R.string.format_view_top_of_header,
+                                topListLength
+                            ),
+                            selectedValue = topListPeriod,
+                            values = DataPreferences.TopListPeriod.entries.toImmutableList(),
+                            onValueSelect = { topListPeriod = it },
+                            valueText = { it.displayName() }
+                        )
+                    }
                 }
             }
 
             itemsIndexed(
                 items = songs,
                 key = { _, song -> song.id },
-                contentType = { _, song -> song },
+                contentType = { _, song -> song }
             ) { index, song ->
                 SongItem(
-                    song = song,
-                    thumbnailSizeDp = thumbnailSizeDp,
-                    thumbnailSizePx = thumbnailSize,
                     modifier = Modifier
                         .combinedClickable(
                             onLongClick = {
                                 menuState.display {
                                     when (builtInPlaylist) {
-                                        BuiltInPlaylist.Favorites -> NonQueuedMediaItemMenu(
-                                            mediaItem = song.asMediaItem,
+                                        BuiltInPlaylist.Offline -> InHistoryMediaItemMenu(
+                                            song = song,
                                             onDismiss = menuState::hide
                                         )
 
-                                        BuiltInPlaylist.Offline -> InHistoryMediaItemMenu(
-                                            song = song,
+                                        BuiltInPlaylist.Favorites,
+                                        BuiltInPlaylist.Top,
+                                        BuiltInPlaylist.History -> NonQueuedMediaItemMenu(
+                                            mediaItem = song.asMediaItem,
                                             onDismiss = menuState::hide
                                         )
                                     }
@@ -144,26 +214,29 @@ fun BuiltInPlaylistSongs(builtInPlaylist: BuiltInPlaylist) {
                             onClick = {
                                 binder?.stopRadio()
                                 binder?.player?.forcePlayAtIndex(
-                                    songs.map(Song::asMediaItem),
-                                    index
+                                    items = songs.map(Song::asMediaItem),
+                                    index = index
                                 )
                             }
                         )
-                        .animateItemPlacement()
+                        .animateItem(),
+                    song = song,
+                    index = if (builtInPlaylist == BuiltInPlaylist.Top) index else null,
+                    thumbnailSize = Dimensions.thumbnails.song,
+                    isPlaying = playing && currentMediaId == song.id
                 )
             }
         }
 
         FloatingActionsContainerWithScrollToTop(
             lazyListState = lazyListState,
-            iconId = R.drawable.shuffle,
+            icon = R.drawable.shuffle,
             onClick = {
-                if (songs.isNotEmpty()) {
-                    binder?.stopRadio()
-                    binder?.player?.forcePlayFromBeginning(
-                        songs.shuffled().map(Song::asMediaItem)
-                    )
-                }
+                if (songs.isEmpty()) return@FloatingActionsContainerWithScrollToTop
+                binder?.stopRadio()
+                binder?.player?.forcePlayFromBeginning(
+                    songs.shuffled().map(Song::asMediaItem)
+                )
             }
         )
     }

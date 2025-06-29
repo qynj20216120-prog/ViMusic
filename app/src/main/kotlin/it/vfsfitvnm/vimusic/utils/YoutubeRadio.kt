@@ -1,10 +1,10 @@
 package it.vfsfitvnm.vimusic.utils
 
 import androidx.media3.common.MediaItem
-import it.vfsfitvnm.innertube.Innertube
-import it.vfsfitvnm.innertube.models.bodies.ContinuationBody
-import it.vfsfitvnm.innertube.models.bodies.NextBody
-import it.vfsfitvnm.innertube.requests.nextPage
+import it.vfsfitvnm.providers.innertube.Innertube
+import it.vfsfitvnm.providers.innertube.models.bodies.ContinuationBody
+import it.vfsfitvnm.providers.innertube.models.bodies.NextBody
+import it.vfsfitvnm.providers.innertube.requests.nextPage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -23,7 +23,7 @@ data class YouTubeRadio(
             val continuation = nextContinuation
 
             if (continuation == null) {
-               Innertube.nextPage(
+                Innertube.nextPage(
                     NextBody(
                         videoId = videoId,
                         playlistId = playlistId,
@@ -43,7 +43,6 @@ data class YouTubeRadio(
                 mediaItems = songsPage.items?.map(Innertube.SongItem::asMediaItem)
                 songsPage.continuation?.takeUnless { nextContinuation == it }
             }
-
         }
 
         return mediaItems ?: emptyList()

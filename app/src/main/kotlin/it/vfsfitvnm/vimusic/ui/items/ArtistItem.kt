@@ -14,132 +14,118 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import it.vfsfitvnm.vimusic.models.Artist
 import it.vfsfitvnm.vimusic.ui.components.themed.TextPlaceholder
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.shimmer
 import it.vfsfitvnm.vimusic.utils.secondary
 import it.vfsfitvnm.vimusic.utils.semiBold
 import it.vfsfitvnm.vimusic.utils.thumbnail
-import it.vfsfitvnm.innertube.Innertube
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.shimmer
+import it.vfsfitvnm.core.ui.utils.px
+import it.vfsfitvnm.providers.innertube.Innertube
+import coil3.compose.AsyncImage
 
 @Composable
 fun ArtistItem(
     artist: Artist,
-    thumbnailSizePx: Int,
-    thumbnailSizeDp: Dp,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier,
-    alternative: Boolean = false,
-) {
-    ArtistItem(
-        thumbnailUrl = artist.thumbnailUrl,
-        name = artist.name,
-        subscribersCount = null,
-        thumbnailSizePx = thumbnailSizePx,
-        thumbnailSizeDp = thumbnailSizeDp,
-        modifier = modifier,
-        alternative = alternative
-    )
-}
+    alternative: Boolean = false
+) = ArtistItem(
+    thumbnailUrl = artist.thumbnailUrl,
+    name = artist.name,
+    subscribersCount = null,
+    thumbnailSize = thumbnailSize,
+    modifier = modifier,
+    alternative = alternative
+)
 
 @Composable
 fun ArtistItem(
     artist: Innertube.ArtistItem,
-    thumbnailSizePx: Int,
-    thumbnailSizeDp: Dp,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier,
-    alternative: Boolean = false,
-) {
-    ArtistItem(
-        thumbnailUrl = artist.thumbnail?.url,
-        name = artist.info?.name,
-        subscribersCount = artist.subscribersCountText,
-        thumbnailSizePx = thumbnailSizePx,
-        thumbnailSizeDp = thumbnailSizeDp,
-        modifier = modifier,
-        alternative = alternative
-    )
-}
+    alternative: Boolean = false
+) = ArtistItem(
+    thumbnailUrl = artist.thumbnail?.url,
+    name = artist.info?.name,
+    subscribersCount = artist.subscribersCountText,
+    thumbnailSize = thumbnailSize,
+    modifier = modifier,
+    alternative = alternative
+)
 
 @Composable
 fun ArtistItem(
     thumbnailUrl: String?,
     name: String?,
     subscribersCount: String?,
-    thumbnailSizePx: Int,
-    thumbnailSizeDp: Dp,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier,
-    alternative: Boolean = false,
+    alternative: Boolean = false
+) = ItemContainer(
+    alternative = alternative,
+    thumbnailSize = thumbnailSize,
+    horizontalAlignment = Alignment.CenterHorizontally,
+    modifier = Modifier.clip(LocalAppearance.current.thumbnailShape) then modifier
 ) {
     val (_, typography) = LocalAppearance.current
 
-    ItemContainer(
-        alternative = alternative,
-        thumbnailSizeDp = thumbnailSizeDp,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
+    AsyncImage(
+        model = thumbnailUrl?.thumbnail(thumbnailSize.px),
+        contentDescription = null,
+        modifier = Modifier
+            .clip(CircleShape)
+            .requiredSize(thumbnailSize)
+    )
+
+    ItemInfoContainer(
+        horizontalAlignment = if (alternative) Alignment.CenterHorizontally else Alignment.Start
     ) {
-        AsyncImage(
-            model = thumbnailUrl?.thumbnail(thumbnailSizePx),
-            contentDescription = null,
-            modifier = Modifier
-                .clip(CircleShape)
-                .requiredSize(thumbnailSizeDp)
+        BasicText(
+            text = name.orEmpty(),
+            style = typography.xs.semiBold,
+            maxLines = if (alternative) 1 else 2,
+            overflow = TextOverflow.Ellipsis
         )
 
-        ItemInfoContainer(
-            horizontalAlignment = if (alternative) Alignment.CenterHorizontally else Alignment.Start,
-        ) {
+        subscribersCount?.let {
             BasicText(
-                text = name ?: "",
-                style = typography.xs.semiBold,
-                maxLines = if (alternative) 1 else 2,
-                overflow = TextOverflow.Ellipsis
+                text = subscribersCount,
+                style = typography.xxs.semiBold.secondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 4.dp)
             )
-
-            subscribersCount?.let {
-                BasicText(
-                    text = subscribersCount,
-                    style = typography.xxs.semiBold.secondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                )
-            }
         }
     }
 }
 
 @Composable
 fun ArtistItemPlaceholder(
-    thumbnailSizeDp: Dp,
+    thumbnailSize: Dp,
     modifier: Modifier = Modifier,
-    alternative: Boolean = false,
+    alternative: Boolean = false
 ) {
     val (colorPalette) = LocalAppearance.current
 
     ItemContainer(
         alternative = alternative,
-        thumbnailSizeDp = thumbnailSizeDp,
+        thumbnailSize = thumbnailSize,
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
     ) {
         Spacer(
             modifier = Modifier
                 .background(color = colorPalette.shimmer, shape = CircleShape)
-                .size(thumbnailSizeDp)
+                .size(thumbnailSize)
         )
 
         ItemInfoContainer(
-            horizontalAlignment = if (alternative) Alignment.CenterHorizontally else Alignment.Start,
+            horizontalAlignment = if (alternative) Alignment.CenterHorizontally else Alignment.Start
         ) {
             TextPlaceholder()
-            TextPlaceholder(
-                modifier = Modifier
-                    .padding(top = 4.dp)
-            )
+            TextPlaceholder(modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

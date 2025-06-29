@@ -14,13 +14,13 @@ import androidx.compose.ui.geometry.center
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
 import it.vfsfitvnm.vimusic.utils.drawCircle
+import it.vfsfitvnm.core.ui.LocalAppearance
 
 @Composable
 fun Switch(
     isChecked: Boolean,
-    modifier: Modifier = Modifier,
+    modifier: Modifier = Modifier
 ) {
     val (colorPalette) = LocalAppearance.current
 
@@ -38,13 +38,10 @@ fun Switch(
         if (it) 36.dp else 12.dp
     }
 
-    Canvas(
-        modifier = modifier
-            .size(width = 48.dp, height = 24.dp)
-    ) {
+    Canvas(modifier = modifier.size(width = 48.dp, height = 24.dp)) {
         drawRoundRect(
             color = backgroundColor,
-            cornerRadius = CornerRadius(x = 12.dp.toPx(), y = 12.dp.toPx()),
+            cornerRadius = CornerRadius(x = 12.dp.toPx(), y = 12.dp.toPx())
         )
 
         drawCircle(

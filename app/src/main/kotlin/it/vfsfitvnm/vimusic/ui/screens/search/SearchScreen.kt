@@ -1,31 +1,31 @@
 package it.vfsfitvnm.vimusic.ui.screens.search
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
-import it.vfsfitvnm.compose.persist.PersistMapCleanup
-import it.vfsfitvnm.compose.routing.RouteHandler
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.ui.components.themed.Scaffold
-import it.vfsfitvnm.vimusic.ui.screens.globalRoutes
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
+import it.vfsfitvnm.vimusic.ui.screens.GlobalRoutes
+import it.vfsfitvnm.vimusic.ui.screens.Route
 import it.vfsfitvnm.vimusic.utils.secondary
+import it.vfsfitvnm.compose.persist.PersistMapCleanup
+import it.vfsfitvnm.compose.routing.RouteHandler
+import it.vfsfitvnm.core.ui.LocalAppearance
 
-@ExperimentalFoundationApi
-@ExperimentalAnimationApi
+@Route
 @Composable
 fun SearchScreen(
     initialTextInput: String,
@@ -34,9 +34,7 @@ fun SearchScreen(
 ) {
     val saveableStateHolder = rememberSaveableStateHolder()
 
-    val (tabIndex, onTabChanged) = rememberSaveable {
-        mutableStateOf(0)
-    }
+    val (tabIndex, onTabChanged) = rememberSaveable { mutableIntStateOf(0) }
 
     val (textFieldValue, onTextFieldValueChanged) = rememberSaveable(
         initialTextInput,
@@ -50,23 +48,22 @@ fun SearchScreen(
         )
     }
 
-    PersistMapCleanup(tagPrefix = "search/")
+    PersistMapCleanup(prefix = "search/")
 
-    RouteHandler(listenToGlobalEmitter = true) {
-        globalRoutes()
+    RouteHandler {
+        GlobalRoutes()
 
-        host {
+        Content {
             val decorationBox: @Composable (@Composable () -> Unit) -> Unit = { innerTextField ->
                 Box {
                     AnimatedVisibility(
                         visible = textFieldValue.text.isEmpty(),
                         enter = fadeIn(tween(300)),
                         exit = fadeOut(tween(300)),
-                        modifier = Modifier
-                            .align(Alignment.CenterEnd)
+                        modifier = Modifier.align(Alignment.CenterEnd)
                     ) {
                         BasicText(
-                            text = "Enter a name",
+                            text = stringResource(R.string.search_placeholder),
                             maxLines = 1,
                             style = LocalAppearance.current.typography.xxl.secondary
                         )
@@ -77,28 +74,30 @@ fun SearchScreen(
             }
 
             Scaffold(
+                key = "search",
                 topIconButtonId = R.drawable.chevron_back,
                 onTopIconButtonClick = pop,
                 tabIndex = tabIndex,
-                onTabChanged = onTabChanged,
-                tabColumnContent = { Item ->
-                    Item(0, "Online", R.drawable.globe)
-                    Item(1, "Library", R.drawable.library)
+                onTabChange = onTabChanged,
+                tabColumnContent = {
+                    tab(0, R.string.online, R.drawable.globe, canHide = false)
+                    tab(1, R.string.library, R.drawable.library)
                 }
             ) { currentTabIndex ->
                 saveableStateHolder.SaveableStateProvider(currentTabIndex) {
                     when (currentTabIndex) {
                         0 -> OnlineSearch(
                             textFieldValue = textFieldValue,
-                            onTextFieldValueChanged = onTextFieldValueChanged,
+                            onTextFieldValueChange = onTextFieldValueChanged,
                             onSearch = onSearch,
                             onViewPlaylist = onViewPlaylist,
-                            decorationBox = decorationBox
+                            decorationBox = decorationBox,
+                            focused = child == null
                         )
 
                         1 -> LocalSongSearch(
                             textFieldValue = textFieldValue,
-                            onTextFieldValueChanged = onTextFieldValueChanged,
+                            onTextFieldValueChange = onTextFieldValueChanged,
                             decorationBox = decorationBox
                         )
                     }

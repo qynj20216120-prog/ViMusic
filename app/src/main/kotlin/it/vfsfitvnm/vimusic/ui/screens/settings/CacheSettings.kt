@@ -1,119 +1,128 @@
 package it.vfsfitvnm.vimusic.ui.screens.settings
 
 import android.text.format.Formatter
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.only
+import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
-import coil.Coil
-import coil.annotation.ExperimentalCoilApi
-import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.media3.common.util.UnstableApi
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
-import it.vfsfitvnm.vimusic.enums.CoilDiskCacheMaxSize
-import it.vfsfitvnm.vimusic.enums.ExoPlayerDiskCacheMaxSize
-import it.vfsfitvnm.vimusic.ui.components.themed.Header
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.utils.coilDiskCacheMaxSizeKey
-import it.vfsfitvnm.vimusic.utils.exoPlayerDiskCacheMaxSizeKey
-import it.vfsfitvnm.vimusic.utils.rememberPreference
+import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.preferences.DataPreferences
+import it.vfsfitvnm.vimusic.preferences.PlayerPreferences
+import it.vfsfitvnm.vimusic.ui.components.themed.LinearProgressIndicator
+import it.vfsfitvnm.vimusic.ui.components.themed.SecondaryTextButton
+import it.vfsfitvnm.vimusic.ui.screens.Route
+import it.vfsfitvnm.core.data.enums.ExoPlayerDiskCacheSize
+import coil3.imageLoader
 
-@OptIn(ExperimentalCoilApi::class)
-@ExperimentalAnimationApi
+@OptIn(UnstableApi::class)
+@Route
 @Composable
-fun CacheSettings() {
+fun CacheSettings() = with(DataPreferences) {
     val context = LocalContext.current
-    val (colorPalette) = LocalAppearance.current
     val binder = LocalPlayerServiceBinder.current
+    val imageCache = remember(context) { context.imageLoader.diskCache }
 
-    var coilDiskCacheMaxSize by rememberPreference(
-        coilDiskCacheMaxSizeKey,
-        CoilDiskCacheMaxSize.`128MB`
-    )
-    var exoPlayerDiskCacheMaxSize by rememberPreference(
-        exoPlayerDiskCacheMaxSizeKey,
-        ExoPlayerDiskCacheMaxSize.`2GB`
-    )
+    SettingsCategoryScreen(title = stringResource(R.string.cache)) {
+        SettingsDescription(text = stringResource(R.string.cache_description))
 
-    Column(
-        modifier = Modifier
-            .background(colorPalette.background0)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(
-                LocalPlayerAwareWindowInsets.current
-                    .only(WindowInsetsSides.Vertical + WindowInsetsSides.End)
-                    .asPaddingValues()
-            )
-    ) {
-        Header(title = "Cache")
-
-        SettingsDescription(text = "When the cache runs out of space, the resources that haven't been accessed for the longest time are cleared")
-
-        Coil.imageLoader(context).diskCache?.let { diskCache ->
-            val diskCacheSize = remember(diskCache) {
-                diskCache.size
+        var imageCacheSize by remember(imageCache) { mutableLongStateOf(imageCache?.size ?: 0L) }
+        imageCache?.let { diskCache ->
+            val formattedSize = remember(imageCacheSize) {
+                Formatter.formatShortFileSize(context, imageCacheSize)
+            }
+            val sizePercentage = remember(imageCacheSize, coilDiskCacheMaxSize) {
+                imageCacheSize.toFloat() / coilDiskCacheMaxSize.bytes.coerceAtLeast(1)
             }
 
-            SettingsGroupSpacer()
-
-            SettingsEntryGroupText(title = "IMAGE CACHE")
-
-            SettingsDescription(
-                text = "${
-                    Formatter.formatShortFileSize(
-                        context,
-                        diskCacheSize
+            SettingsGroup(
+                title = stringResource(R.string.image_cache),
+                description = stringResource(
+                    R.string.format_cache_space_used_percentage,
+                    formattedSize,
+                    (sizePercentage * 100).toInt()
+                ),
+                trailingContent = {
+                    SecondaryTextButton(
+                        text = stringResource(R.string.clear),
+                        onClick = {
+                            diskCache.clear()
+                            imageCacheSize = 0L
+                        },
+                        modifier = Modifier.padding(end = 12.dp)
                     )
-                } used (${diskCacheSize * 100 / coilDiskCacheMaxSize.bytes.coerceAtLeast(1)}%)"
-            )
-
-            EnumValueSelectorSettingsEntry(
-                title = "Max size",
-                selectedValue = coilDiskCacheMaxSize,
-                onValueSelected = { coilDiskCacheMaxSize = it }
-            )
-        }
-
-        binder?.cache?.let { cache ->
-            val diskCacheSize by remember {
-                derivedStateOf {
-                    cache.cacheSpace
                 }
+            ) {
+                LinearProgressIndicator(
+                    progress = sizePercentage,
+                    strokeCap = StrokeCap.Round,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                        .padding(start = 32.dp, end = 16.dp)
+                )
+                EnumValueSelectorSettingsEntry(
+                    title = stringResource(R.string.max_size),
+                    selectedValue = coilDiskCacheMaxSize,
+                    onValueSelect = { coilDiskCacheMaxSize = it }
+                )
+            }
+        }
+        binder?.cache?.let { cache ->
+            val diskCacheSize by remember { derivedStateOf { cache.cacheSpace } }
+            val formattedSize = remember(diskCacheSize) {
+                Formatter.formatShortFileSize(context, diskCacheSize)
+            }
+            val sizePercentage = remember(diskCacheSize, exoPlayerDiskCacheMaxSize) {
+                diskCacheSize.toFloat() / exoPlayerDiskCacheMaxSize.bytes.coerceAtLeast(1)
             }
 
-            SettingsGroupSpacer()
-
-            SettingsEntryGroupText(title = "SONG CACHE")
-
-            SettingsDescription(
-                text = buildString {
-                    append(Formatter.formatShortFileSize(context, diskCacheSize))
-                    append(" used")
-                    when (val size = exoPlayerDiskCacheMaxSize) {
-                        ExoPlayerDiskCacheMaxSize.Unlimited -> {}
-                        else -> append(" (${diskCacheSize * 100 / size.bytes}%)")
-                    }
+            SettingsGroup(
+                title = stringResource(R.string.song_cache),
+                description = if (exoPlayerDiskCacheMaxSize == ExoPlayerDiskCacheSize.Unlimited) stringResource(
+                    R.string.format_cache_space_used,
+                    formattedSize
+                )
+                else stringResource(
+                    R.string.format_cache_space_used_percentage,
+                    formattedSize,
+                    (sizePercentage * 100).toInt()
+                )
+            ) {
+                AnimatedVisibility(visible = exoPlayerDiskCacheMaxSize != ExoPlayerDiskCacheSize.Unlimited) {
+                    LinearProgressIndicator(
+                        progress = sizePercentage,
+                        strokeCap = StrokeCap.Round,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp)
+                            .padding(start = 32.dp, end = 16.dp)
+                    )
                 }
-            )
-
-            EnumValueSelectorSettingsEntry(
-                title = "Max size",
-                selectedValue = exoPlayerDiskCacheMaxSize,
-                onValueSelected = { exoPlayerDiskCacheMaxSize = it }
-            )
+                EnumValueSelectorSettingsEntry(
+                    title = stringResource(R.string.max_size),
+                    selectedValue = exoPlayerDiskCacheMaxSize,
+                    onValueSelect = { exoPlayerDiskCacheMaxSize = it }
+                )
+                SwitchSettingsEntry(
+                    title = stringResource(R.string.pause_song_cache),
+                    text = stringResource(R.string.pause_song_cache_description),
+                    isChecked = PlayerPreferences.pauseCache,
+                    onCheckedChange = { PlayerPreferences.pauseCache = it }
+                )
+            }
         }
     }
 }

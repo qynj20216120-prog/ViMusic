@@ -1,6 +1,5 @@
 package it.vfsfitvnm.vimusic.ui.screens.artist
 
-import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -19,7 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import it.vfsfitvnm.compose.persist.persist
+import androidx.compose.ui.res.stringResource
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
@@ -33,21 +32,23 @@ import it.vfsfitvnm.vimusic.ui.components.themed.NonQueuedMediaItemMenu
 import it.vfsfitvnm.vimusic.ui.components.themed.SecondaryTextButton
 import it.vfsfitvnm.vimusic.ui.items.SongItem
 import it.vfsfitvnm.vimusic.ui.items.SongItemPlaceholder
-import it.vfsfitvnm.vimusic.ui.styling.Dimensions
-import it.vfsfitvnm.vimusic.ui.styling.LocalAppearance
-import it.vfsfitvnm.vimusic.ui.styling.px
 import it.vfsfitvnm.vimusic.utils.asMediaItem
 import it.vfsfitvnm.vimusic.utils.enqueue
 import it.vfsfitvnm.vimusic.utils.forcePlayAtIndex
 import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
+import it.vfsfitvnm.vimusic.utils.playingSong
+import it.vfsfitvnm.compose.persist.persist
+import it.vfsfitvnm.core.ui.Dimensions
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.utils.isLandscape
 
-@ExperimentalFoundationApi
-@ExperimentalAnimationApi
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ArtistLocalSongs(
     browseId: String,
     headerContent: @Composable (textButton: (@Composable () -> Unit)?) -> Unit,
     thumbnailContent: @Composable () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val binder = LocalPlayerServiceBinder.current
     val (colorPalette) = LocalAppearance.current
@@ -59,17 +60,19 @@ fun ArtistLocalSongs(
         Database.artistSongs(browseId).collect { songs = it }
     }
 
-    val songThumbnailSizeDp = Dimensions.thumbnails.song
-    val songThumbnailSizePx = songThumbnailSizeDp.px
-
     val lazyListState = rememberLazyListState()
 
-    LayoutWithAdaptiveThumbnail(thumbnailContent = thumbnailContent) {
+    val (currentMediaId, playing) = playingSong(binder)
+
+    LayoutWithAdaptiveThumbnail(
+        thumbnailContent = thumbnailContent,
+        modifier = modifier
+    ) {
         Box {
             LazyColumn(
                 state = lazyListState,
                 contentPadding = LocalPlayerAwareWindowInsets.current
-                .only(WindowInsetsSides.Vertical + WindowInsetsSides.End).asPaddingValues(),
+                    .only(WindowInsetsSides.Vertical + WindowInsetsSides.End).asPaddingValues(),
                 modifier = Modifier
                     .background(colorPalette.background0)
                     .fillMaxSize()
@@ -81,7 +84,7 @@ fun ArtistLocalSongs(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         headerContent {
                             SecondaryTextButton(
-                                text = "Enqueue",
+                                text = stringResource(R.string.enqueue),
                                 enabled = !songs.isNullOrEmpty(),
                                 onClick = {
                                     binder?.player?.enqueue(songs!!.map(Song::asMediaItem))
@@ -89,7 +92,7 @@ fun ArtistLocalSongs(
                             )
                         }
 
-                        thumbnailContent()
+                        if (!isLandscape) thumbnailContent()
                     }
                 }
 
@@ -99,33 +102,32 @@ fun ArtistLocalSongs(
                         key = { _, song -> song.id }
                     ) { index, song ->
                         SongItem(
-                            song = song,
-                            thumbnailSizeDp = songThumbnailSizeDp,
-                            thumbnailSizePx = songThumbnailSizePx,
-                            modifier = Modifier
-                                .combinedClickable(
-                                    onLongClick = {
-                                        menuState.display {
-                                            NonQueuedMediaItemMenu(
-                                                onDismiss = menuState::hide,
-                                                mediaItem = song.asMediaItem,
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        binder?.stopRadio()
-                                        binder?.player?.forcePlayAtIndex(
-                                            songs.map(Song::asMediaItem),
-                                            index
+                            modifier = Modifier.combinedClickable(
+                                onLongClick = {
+                                    menuState.display {
+                                        NonQueuedMediaItemMenu(
+                                            onDismiss = menuState::hide,
+                                            mediaItem = song.asMediaItem
                                         )
                                     }
-                                )
+                                },
+                                onClick = {
+                                    binder?.stopRadio()
+                                    binder?.player?.forcePlayAtIndex(
+                                        items = songs.map(Song::asMediaItem),
+                                        index = index
+                                    )
+                                }
+                            ),
+                            song = song,
+                            thumbnailSize = Dimensions.thumbnails.song,
+                            isPlaying = playing && currentMediaId == song.id
                         )
                     }
                 } ?: item(key = "loading") {
                     ShimmerHost {
                         repeat(4) {
-                            SongItemPlaceholder(thumbnailSizeDp = Dimensions.thumbnails.song)
+                            SongItemPlaceholder(thumbnailSize = Dimensions.thumbnails.song)
                         }
                     }
                 }
@@ -133,7 +135,7 @@ fun ArtistLocalSongs(
 
             FloatingActionsContainerWithScrollToTop(
                 lazyListState = lazyListState,
-                iconId = R.drawable.shuffle,
+                icon = R.drawable.shuffle,
                 onClick = {
                     songs?.let { songs ->
                         if (songs.isNotEmpty()) {

@@ -6,88 +6,78 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
 data class ScrollingInfo(
     val isScrollingDown: Boolean = false,
-    val isFar: Boolean = false
-) {
-    fun and(condition: Boolean) =
-//        copy(isScrollingDown = isScrollingDown && condition, isFar = isFar && condition)
-        if (condition) this else copy(isScrollingDown = !isScrollingDown, isFar = !isFar)
-}
+    val isFar: Boolean = false,
+    val isReversed: Boolean = false
+)
 
 @Composable
-fun LazyListState.scrollingInfo(): ScrollingInfo {
-    var previousIndex by remember(this) {
-        mutableStateOf(firstVisibleItemIndex)
-    }
+fun LazyListState.scrollingInfo(key: Any = Unit): ScrollingInfo {
+    var previousIndex by remember(this) { mutableIntStateOf(firstVisibleItemIndex) }
+    var previousScrollOffset by remember(this) { mutableIntStateOf(firstVisibleItemScrollOffset) }
 
-    var previousScrollOffset by remember(this) {
-        mutableStateOf(firstVisibleItemScrollOffset)
-    }
-
-    return remember(this) {
+    return remember(this, key) {
         derivedStateOf {
-            val isScrollingDown = if (previousIndex == firstVisibleItemIndex) {
-                firstVisibleItemScrollOffset > previousScrollOffset
-            } else {
-                firstVisibleItemIndex > previousIndex
-            }
-
+            val isScrollingDown =
+                if (previousIndex == firstVisibleItemIndex) firstVisibleItemScrollOffset > previousScrollOffset
+                else firstVisibleItemIndex > previousIndex
             val isFar = firstVisibleItemIndex > layoutInfo.visibleItemsInfo.size
 
             previousIndex = firstVisibleItemIndex
             previousScrollOffset = firstVisibleItemScrollOffset
 
-            ScrollingInfo(isScrollingDown, isFar)
+            ScrollingInfo(
+                isScrollingDown = isScrollingDown,
+                isFar = isFar,
+                isReversed = layoutInfo.reverseLayout
+            )
         }
     }.value
 }
 
 @Composable
-fun LazyGridState.scrollingInfo(): ScrollingInfo {
-    var previousIndex by remember(this) {
-        mutableStateOf(firstVisibleItemIndex)
-    }
+fun LazyGridState.scrollingInfo(key: Any = Unit): ScrollingInfo {
+    var previousIndex by remember(this) { mutableIntStateOf(firstVisibleItemIndex) }
+    var previousScrollOffset by remember(this) { mutableIntStateOf(firstVisibleItemScrollOffset) }
 
-    var previousScrollOffset by remember(this) {
-        mutableStateOf(firstVisibleItemScrollOffset)
-    }
-
-    return remember(this) {
+    return remember(this, key) {
         derivedStateOf {
-            val isScrollingDown = if (previousIndex == firstVisibleItemIndex) {
-                firstVisibleItemScrollOffset > previousScrollOffset
-            } else {
-                firstVisibleItemIndex > previousIndex
-            }
-
+            val isScrollingDown =
+                if (previousIndex == firstVisibleItemIndex) firstVisibleItemScrollOffset > previousScrollOffset
+                else firstVisibleItemIndex > previousIndex
             val isFar = firstVisibleItemIndex > layoutInfo.visibleItemsInfo.size
 
             previousIndex = firstVisibleItemIndex
             previousScrollOffset = firstVisibleItemScrollOffset
 
-            ScrollingInfo(isScrollingDown, isFar)
+            ScrollingInfo(
+                isScrollingDown = isScrollingDown,
+                isFar = isFar,
+                isReversed = layoutInfo.reverseLayout
+            )
         }
     }.value
 }
 
 @Composable
-fun ScrollState.scrollingInfo(): ScrollingInfo {
-    var previousValue by remember(this) {
-        mutableStateOf(value)
-    }
+fun ScrollState.scrollingInfo(key: Any = Unit): ScrollingInfo {
+    var previousValue by remember(this) { mutableIntStateOf(value) }
 
-    return remember(this) {
+    return remember(this, key) {
         derivedStateOf {
             val isScrollingDown = value > previousValue
-
             previousValue = value
 
-            ScrollingInfo(isScrollingDown, false)
+            ScrollingInfo(
+                isScrollingDown = isScrollingDown,
+                isFar = false,
+                isReversed = false
+            )
         }
     }.value
 }
