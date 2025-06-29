@@ -17,7 +17,10 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
 import java.io.EOFException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import kotlin.math.pow
+import kotlin.random.Random
 
 class RangeHandlerDataSourceFactory(private val parent: DataSource.Factory) : DataSource.Factory {
     class Source(private val parent: DataSource) : DataSource by parent {
@@ -32,7 +35,7 @@ class RangeHandlerDataSourceFactory(private val parent: DataSource.Factory) : Da
                     .buildUpon()
                     .setHttpRequestHeaders(
                         dataSpec.httpRequestHeaders.filter {
-                            it.key.equals("range", ignoreCase = true)
+                            !it.key.equals("range", ignoreCase = true)
                         }
                     )
                     .setLength(C.LENGTH_UNSET.toLong())
@@ -54,13 +57,28 @@ class CatchingDataSourceFactory(
             parent.open(dataSpec)
         }.getOrElse { ex ->
             ex.printStackTrace()
+            Log.e(TAG, "Error opening data source: ${ex.message}", ex)
 
-            if (ex is PlaybackException) throw ex
-            else throw PlaybackException(
-                /* message = */ "Unknown playback error",
-                /* cause = */ ex,
-                /* errorCode = */ PlaybackException.ERROR_CODE_UNSPECIFIED
-            ).also { onError?.invoke(it) }
+            // Handle specific error codes that indicate stream expiry or access issues
+            val responseCode = ex.findCause<InvalidResponseCodeException>()?.responseCode
+            when (responseCode) {
+                403, 404, 410 -> {
+                    Log.w(TAG, "Stream access denied or expired (HTTP $responseCode), requesting refresh")
+                    throw PlaybackException(
+                        "Stream access denied or expired",
+                        ex,
+                        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
+                    ).also { onError?.invoke(it) }
+                }
+                else -> {
+                    if (ex is PlaybackException) throw ex
+                    else throw PlaybackException(
+                        "Unknown playback error",
+                        ex,
+                        PlaybackException.ERROR_CODE_UNSPECIFIED
+                    ).also { onError?.invoke(it) }
+                }
+            }
         }
     }
 
@@ -84,12 +102,13 @@ class FallbackDataSourceFactory(
             parent.open(dataSpec)
         }.getOrElse { ex ->
             ex.printStackTrace()
+            Log.w(TAG, "Primary source failed, trying fallback: ${ex.message}")
 
             runCatching {
                 fallback.createDataSource().open(dataSpec)
             }.getOrElse { fallbackEx ->
                 fallbackEx.printStackTrace()
-
+                Log.e(TAG, "Fallback source also failed: ${fallbackEx.message}")
                 throw ex
             }
         }
@@ -118,8 +137,18 @@ class RetryingDataSourceFactory(
         override fun open(dataSpec: DataSpec): Long {
             var lastException: Throwable? = null
             var retries = 0
-            while (retries < maxRetries) {
-                if (retries > 0) Log.d(TAG, "Retry $retries of $maxRetries fetching datasource")
+            while (retries <= maxRetries) {
+                if (retries > 0) {
+                    Log.d(TAG, "Retry $retries of $maxRetries fetching datasource")
+
+                    // Add jitter to prevent thundering herd
+                    val baseDelay = if (exponential) 1000L * 2.0.pow(retries - 1).toLong() else 2500L
+                    val jitter = Random.nextLong(0, baseDelay / 4)
+                    val delay = baseDelay + jitter
+
+                    Log.d(TAG, "Retry policy accepted retry, sleeping for $delay milliseconds")
+                    Thread.sleep(delay)
+                }
 
                 @Suppress("TooGenericExceptionCaught")
                 return try {
@@ -127,28 +156,33 @@ class RetryingDataSourceFactory(
                 } catch (ex: Throwable) {
                     lastException = ex
                     if (printStackTrace) Log.e(
-                        /* tag = */ TAG,
-                        /* msg = */ "Exception caught by retry mechanism",
-                        /* tr = */ ex
+                        TAG,
+                        "Exception caught by retry mechanism (attempt ${retries + 1})",
+                        ex
                     )
+
+                    // Don't retry certain unrecoverable errors
+                    val responseCode = ex.findCause<InvalidResponseCodeException>()?.responseCode
+                    if (responseCode in listOf(401, 403, 404, 410)) {
+                        Log.e(TAG, "Unrecoverable HTTP error $responseCode, not retrying")
+                        throw ex
+                    }
+
+                    if (retries >= maxRetries) {
+                        Log.e(TAG, "Max retries $maxRetries exceeded, throwing the last exception...")
+                        throw ex
+                    }
+
                     if (predicate(ex)) {
-                        val time = if (exponential) 1000L * 2.0.pow(retries).toLong() else 2500L
-                        Log.d(TAG, "Retry policy accepted retry, sleeping for $time milliseconds")
-                        Thread.sleep(time)
                         retries++
                         continue
                     }
-                    Log.e(
-                        TAG,
-                        "Retry policy declined retry, throwing the last exception..."
-                    )
+
+                    Log.e(TAG, "Retry policy declined retry, throwing the last exception...")
                     throw ex
                 }
             }
-            Log.e(
-                TAG,
-                "Max retries $maxRetries exceeded, throwing the last exception..."
-            )
+
             throw lastException!!
         }
     }
@@ -157,7 +191,7 @@ class RetryingDataSourceFactory(
 }
 
 inline fun <reified T : Throwable> DataSource.Factory.retryIf(
-    maxRetries: Int = 5,
+    maxRetries: Int = 3,
     printStackTrace: Boolean = false,
     exponential: Boolean = true
 ) = retryIf(maxRetries, printStackTrace, exponential) { ex -> ex.findCause<T>() != null }
@@ -165,18 +199,29 @@ inline fun <reified T : Throwable> DataSource.Factory.retryIf(
 private const val TAG = "DataSource.Factory"
 
 fun DataSource.Factory.retryIf(
-    maxRetries: Int = 5,
+    maxRetries: Int = 3,
     printStackTrace: Boolean = false,
     exponential: Boolean = true,
     predicate: (Throwable) -> Boolean
 ): DataSource.Factory = RetryingDataSourceFactory(this, maxRetries, printStackTrace, exponential, predicate)
+
+// Enhanced retry policy for common network issues
+fun DataSource.Factory.withNetworkRetry(
+    maxRetries: Int = 3
+): DataSource.Factory = retryIf(maxRetries, true, true) { ex ->
+    ex.findCause<SocketTimeoutException>() != null ||
+        ex.findCause<UnknownHostException>() != null ||
+        (ex.findCause<InvalidResponseCodeException>()?.responseCode in listOf(429, 500, 502, 503, 504))
+}
 
 val Cache.asDataSource get() = CacheDataSource.Factory().setCache(this)
 
 val Context.defaultDataSource
     get() = DefaultDataSource.Factory(
         this,
-        DefaultHttpDataSource.Factory().setConnectTimeoutMs(16000)
-            .setReadTimeoutMs(8000)
-            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; rv:91.0) Gecko/20100101 Firefox/91.0")
+        DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(15000)
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .setAllowCrossProtocolRedirects(true)
     )

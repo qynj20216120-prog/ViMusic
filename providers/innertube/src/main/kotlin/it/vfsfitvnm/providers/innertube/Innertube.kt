@@ -29,10 +29,12 @@ import io.ktor.http.contentType
 import io.ktor.http.parameters
 import io.ktor.http.parseQueryString
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import kotlin.random.Random
 
 internal val json = Json {
     ignoreUnknownKeys = true
@@ -42,16 +44,44 @@ internal val json = Json {
 
 object Innertube {
     private var javascriptChallenge: JavaScriptChallenge? = null
+    private var lastChallengeUpdate = 0L
+    private const val CHALLENGE_CACHE_DURATION = 30 * 60 * 1000L // 30 minutes
+
+    // Rotate API keys to reduce rate limiting
+    private val API_KEYS = listOf(
+        "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30",
+        "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
+        "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc"
+    )
+
+    private var currentApiKeyIndex = 0
+    private fun getApiKey(): String {
+        currentApiKeyIndex = (currentApiKeyIndex + 1) % API_KEYS.size
+        return API_KEYS[currentApiKeyIndex]
+    }
 
     private val OriginInterceptor = createClientPlugin("OriginInterceptor") {
         client.sendPipeline.intercept(HttpSendPipeline.State) {
             context.headers {
-                val host =
-                    if (context.host == "youtubei.googleapis.com") "www.youtube.com" else context.host
+                val host = when (context.host) {
+                    "youtubei.googleapis.com" -> "www.youtube.com"
+                    "music.youtube.com" -> "music.youtube.com"
+                    else -> context.host
+                }
                 val origin = "${context.url.protocol.name}://$host"
+
                 set("host", host)
                 set("x-origin", origin)
                 set("origin", origin)
+                set("referer", "$origin/")
+
+                // Add additional headers to appear more like a real browser
+                set("sec-fetch-dest", "empty")
+                set("sec-fetch-mode", "cors")
+                set("sec-fetch-site", "same-origin")
+                set("sec-ch-ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"")
+                set("sec-ch-ua-mobile", "?0")
+                set("sec-ch-ua-platform", "\"Windows\"")
             }
         }
     }
@@ -64,7 +94,13 @@ object Innertube {
             handleResponseExceptionWithRequest { cause, _ ->
                 val ex = cause as? ResponseException ?: return@handleResponseExceptionWithRequest
                 val code = ex.response.status.value
-                if (code !in (100..<600)) throw InvalidHttpCodeException(code)
+
+                // Log rate limiting and auth errors
+                when (code) {
+                    403 -> logger.warn("Access forbidden (403) - possible rate limiting or auth issue")
+                    429 -> logger.warn("Too many requests (429) - rate limited")
+                    else -> if (code !in (100..<600)) throw InvalidHttpCodeException(code)
+                }
             }
         }
 
@@ -83,17 +119,30 @@ object Innertube {
         }
 
         install(OriginInterceptor)
+
+        engine {
+            config {
+                connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
     }
+
     val client = baseClient.config {
         defaultRequest {
             url(scheme = "https", host = "music.youtube.com") {
                 contentType(ContentType.Application.Json)
                 headers {
-                    set("X-Goog-Api-Key", API_KEY)
+                    set("X-Goog-Api-Key", getApiKey())
+                    set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    set("Accept", "application/json")
+                    set("Accept-Language", "en-US,en;q=0.9")
+                    set("Accept-Encoding", "gzip, deflate, br")
                 }
                 parameters {
                     set("prettyPrint", "false")
-                    set("key", API_KEY)
+                    set("key", getApiKey())
                 }
             }
         }
@@ -108,42 +157,64 @@ object Innertube {
     )
 
     private suspend fun getJavaScriptChallenge(context: Context): JavaScriptChallenge? {
-        if (javascriptChallenge != null) return javascriptChallenge
+        val currentTime = System.currentTimeMillis()
 
-        context.client.getConfiguration()
-        val jsUrl = context.client.jsUrl ?: return null
+        // Check if we need to refresh the challenge
+        if (javascriptChallenge != null &&
+            (currentTime - lastChallengeUpdate) < CHALLENGE_CACHE_DURATION) {
+            return javascriptChallenge
+        }
 
-        val sourceFile = baseClient
-            .get("${context.client.root}$jsUrl") {
-                context.apply()
-            }
-            .bodyAsText()
+        return try {
+            context.client.getConfiguration()
+            val jsUrl = context.client.jsUrl ?: return null
 
-        val timestamp = "(?:signatureTimestamp|sts):(\\d{5})".toRegex()
-            .find(sourceFile)
-            ?.groups
-            ?.get(1)
-            ?.value
-            ?.trim()
-            ?.takeIf { it.isNotBlank() } ?: return null
-        val functionName = regexes.firstNotNullOfOrNull { regex ->
-            regex
+            // Add some delay and jitter to avoid being detected
+            delay(Random.nextLong(100, 500))
+
+            val sourceFile = baseClient
+                .get("${context.client.root}$jsUrl") {
+                    context.apply()
+                    header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    header("Accept", "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01")
+                    header("Referer", "${context.client.root}/")
+                }
+                .bodyAsText()
+
+            val timestamp = "(?:signatureTimestamp|sts):(\\d{5})".toRegex()
                 .find(sourceFile)
                 ?.groups
                 ?.get(1)
                 ?.value
                 ?.trim()
-                ?.takeIf { it.isNotBlank() }
-        } ?: return null
+                ?.takeIf { it.isNotBlank() } ?: return null
 
-        return JavaScriptChallenge(
-            source = sourceFile
-                .replace("document.location.hostname", "\"youtube.com\"")
-                .replace("window.location.hostname", "\"youtube.com\"")
-                .replace("XMLHttpRequest.prototype.fetch", "\"aaa\""),
-            timestamp = timestamp,
-            functionName = functionName
-        ).also { javascriptChallenge = it }
+            val functionName = regexes.firstNotNullOfOrNull { regex ->
+                regex
+                    .find(sourceFile)
+                    ?.groups
+                    ?.get(1)
+                    ?.value
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+            } ?: return null
+
+            JavaScriptChallenge(
+                source = sourceFile
+                    .replace("document.location.hostname", "\"youtube.com\"")
+                    .replace("window.location.hostname", "\"youtube.com\"")
+                    .replace("XMLHttpRequest.prototype.fetch", "\"aaa\""),
+                timestamp = timestamp,
+                functionName = functionName
+            ).also {
+                javascriptChallenge = it
+                lastChallengeUpdate = currentTime
+                logger.info("JavaScript challenge updated successfully")
+            }
+        } catch (e: Exception) {
+            logger.error("Failed to get JavaScript challenge", e)
+            null
+        }
     }
 
     suspend fun decodeSignatureCipher(context: Context, cipher: String): String? = runCatchingCancellable {
@@ -155,13 +226,24 @@ object Innertube {
         val actualSignature = getJavaScriptChallenge(context)?.decode(signature)
             ?: return@runCatchingCancellable null
         "$url&$signatureParam=$actualSignature"
-    }?.onFailure { it.printStackTrace() }?.getOrNull()
+    }?.onFailure {
+        logger.error("Failed to decode signature cipher", it)
+        it.printStackTrace()
+    }?.getOrNull()
 
     suspend fun getSignatureTimestamp(context: Context): String? = runCatchingCancellable {
         getJavaScriptChallenge(context)?.timestamp
-    }?.onFailure { it.printStackTrace() }?.getOrNull()
+    }?.onFailure {
+        logger.error("Failed to get signature timestamp", it)
+        it.printStackTrace()
+    }?.getOrNull()
 
-    private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
+    // Force refresh of JavaScript challenge when needed
+    suspend fun refreshJavaScriptChallenge(context: Context): JavaScriptChallenge? {
+        javascriptChallenge = null
+        lastChallengeUpdate = 0L
+        return getJavaScriptChallenge(context)
+    }
 
     private const val BASE = "/youtubei/v1"
     internal const val BROWSE = "$BASE/browse"
