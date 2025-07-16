@@ -1,5 +1,7 @@
+# === Kotlin Coroutines Support ===
 -keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
 
+# === kotlinx.serialization Support ===
 -if @kotlinx.serialization.Serializable class **
 -keepclassmembers class <1> {
     static <1>$Companion Companion;
@@ -22,6 +24,7 @@
 
 -keepattributes RuntimeVisibleAnnotations,AnnotationDefault
 
+# === Common JSSE / SSL Compatibility ===
 -dontwarn org.bouncycastle.jsse.BCSSLParameters
 -dontwarn org.bouncycastle.jsse.BCSSLSocket
 -dontwarn org.bouncycastle.jsse.provider.BouncyCastleJsseProvider
@@ -38,3 +41,7 @@
 -dontwarn java.beans.Introspector
 -dontwarn java.beans.PropertyDescriptor
 -dontwarn org.mozilla.javascript.**
+
+# === Fix for Ktor + OkHttp Internal Crashes in Release ===
+-keep class okhttp3.internal.** { *; }
+-dontwarn okhttp3.internal.**
