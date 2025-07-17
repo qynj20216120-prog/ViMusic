@@ -88,7 +88,6 @@ import it.vfsfitvnm.core.ui.LocalAppearance
 import it.vfsfitvnm.core.ui.onOverlay
 import it.vfsfitvnm.core.ui.onOverlayShimmer
 import it.vfsfitvnm.core.ui.overlay
-import it.vfsfitvnm.core.ui.utils.dp
 import it.vfsfitvnm.providers.innertube.Innertube
 import it.vfsfitvnm.providers.innertube.models.bodies.NextBody
 import it.vfsfitvnm.providers.innertube.requests.lyrics
@@ -98,6 +97,7 @@ import it.vfsfitvnm.providers.lrclib.LrcParser
 import it.vfsfitvnm.providers.lrclib.models.Track
 import it.vfsfitvnm.providers.lrclib.toLrcFile
 import com.valentinilk.shimmer.shimmer
+import it.vfsfitvnm.core.ui.utils.dp
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CancellationException
@@ -111,11 +111,10 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import it.vfsfitvnm.providers.lyricsplus.LyricsPlus
 import it.vfsfitvnm.providers.lyricsplus.LyricsPlusSyncManager
-import it.vfsfitvnm.vimusic.ui.screens.player.WordSyncedLyrics
 import kotlinx.coroutines.isActive
 
 private const val UPDATE_DELAY = 50L
-
+private val wordSyncCache = mutableMapOf<String, LyricsPlusSyncManager>()
 @Composable
 fun Lyrics(
     mediaId: String,
@@ -167,10 +166,11 @@ fun Lyrics(
     }
     var invalidLrc by remember(text) { mutableStateOf(false) }
 
-    var wordSyncedManager by remember(mediaId, shouldShowSynchronizedLyrics) {
+    // Use rememberSaveable to persist wordSynced states across recompositions
+    var wordSyncedManager by rememberSaveable(mediaId, shouldShowSynchronizedLyrics) {
         mutableStateOf<LyricsPlusSyncManager?>(null)
     }
-    var wordSyncedAvailable by remember(mediaId, shouldShowSynchronizedLyrics) {
+    var wordSyncedAvailable by rememberSaveable(mediaId, shouldShowSynchronizedLyrics) {
         mutableStateOf(false)
     }
 
@@ -182,7 +182,7 @@ fun Lyrics(
         }
     }
 
-    LaunchedEffect(mediaId, shouldShowSynchronizedLyrics) {
+    LaunchedEffect(mediaId, shouldShowSynchronizedLyrics, binder?.player?.isPlaying) {
         runCatching {
             withContext(Dispatchers.IO) {
                 Database
@@ -195,6 +195,47 @@ fun Lyrics(
                             (currentLyrics?.fixed != null && currentLyrics.synced != null)
                         ) {
                             lyrics = currentLyrics
+
+                            // Check cache first for word-level lyrics
+                            if (wordSyncCache.containsKey(mediaId)) {
+                                wordSyncedManager = wordSyncCache[mediaId]
+                                wordSyncedAvailable = true
+                            } else if (wordSyncedManager == null) {
+                                // Only fetch if not in cache and not already set
+                                val mediaMetadata = currentMediaMetadataProvider()
+                                val duration = withContext(Dispatchers.Main) {
+                                    currentDurationProvider()
+                                }
+                                val album = mediaMetadata.albumTitle?.toString()
+                                val artist = mediaMetadata.artist?.toString().orEmpty()
+                                val title = mediaMetadata.title?.toString().orEmpty().let {
+                                    if (mediaId.startsWith(LOCAL_KEY_PREFIX)) {
+                                        it.substringBeforeLast('.').trim()
+                                    } else it
+                                }
+
+                                val wordLevelLyrics = LyricsPlus.fetchLyrics(
+                                    title = title,
+                                    artist = artist,
+                                    album = album,
+                                    duration = duration.toInt()
+                                )
+
+                                if (!wordLevelLyrics.isNullOrEmpty()) {
+                                    val manager = LyricsPlusSyncManager(
+                                        lyrics = wordLevelLyrics,
+                                        positionProvider = {
+                                            binder?.player?.currentPosition ?: 0L
+                                        }
+                                    )
+                                    // Cache the manager
+                                    wordSyncCache[mediaId] = manager
+                                    wordSyncedManager = manager
+                                    wordSyncedAvailable = true
+                                } else {
+                                    wordSyncedAvailable = false
+                                }
+                            }
                         } else {
                             val mediaMetadata = currentMediaMetadataProvider()
                             var duration = withContext(Dispatchers.Main) {
@@ -219,27 +260,39 @@ fun Lyrics(
                             lyrics = null
                             error = false
 
-                            // ✅ Try LyricsPlus word-level first
-                            val wordLevelLyrics = LyricsPlus.fetchLyrics(
-                                title = title,
-                                artist = artist,
-                                album = album,
-                                duration = duration.toInt()
-                            )
-
-                            if (!wordLevelLyrics.isNullOrEmpty()) {
-                                wordSyncedManager = LyricsPlusSyncManager(
-                                    lyrics = wordLevelLyrics,
-                                    positionProvider = {
-                                        binder?.player?.currentPosition ?: 0L
-                                    }
-                                )
+                            // DON'T reset wordSyncedManager here - check cache instead
+                            if (wordSyncCache.containsKey(mediaId)) {
+                                wordSyncedManager = wordSyncCache[mediaId]
                                 wordSyncedAvailable = true
                             } else {
+                                wordSyncedManager = null
                                 wordSyncedAvailable = false
+
+                                // ✅ Try LyricsPlus word-level first
+                                val wordLevelLyrics = LyricsPlus.fetchLyrics(
+                                    title = title,
+                                    artist = artist,
+                                    album = album,
+                                    duration = duration.toInt()
+                                )
+
+                                if (!wordLevelLyrics.isNullOrEmpty()) {
+                                    val manager = LyricsPlusSyncManager(
+                                        lyrics = wordLevelLyrics,
+                                        positionProvider = {
+                                            binder?.player?.currentPosition ?: 0L
+                                        }
+                                    )
+                                    // Cache the manager
+                                    wordSyncCache[mediaId] = manager
+                                    wordSyncedManager = manager
+                                    wordSyncedAvailable = true
+                                } else {
+                                    wordSyncedAvailable = false
+                                }
                             }
 
-                            // ✅ Fallback to line-level sources
+                            // ✅ Fallback to line-level sources (keep existing logic)
                             val fixed = currentLyrics?.fixed ?: Innertube
                                 .lyrics(NextBody(videoId = mediaId))
                                 ?.getOrNull()
@@ -284,9 +337,11 @@ fun Lyrics(
                             }
                         }
 
-                        error =
-                            (shouldShowSynchronizedLyrics && lyrics?.synced?.isBlank() == true) ||
-                                (!shouldShowSynchronizedLyrics && lyrics?.fixed?.isBlank() == true)
+                        error = if (shouldShowSynchronizedLyrics) {
+                            !wordSyncedAvailable && lyrics?.synced?.isBlank() == true
+                        } else {
+                            lyrics?.fixed?.isBlank() == true
+                        }
                     }
             }
         }.exceptionOrNull()?.let {
@@ -392,7 +447,7 @@ fun Lyrics(
         }
 
         AnimatedVisibility(
-            visible = !text.isNullOrBlank() && !error && invalidLrc && shouldShowSynchronizedLyrics,
+            visible = !text.isNullOrBlank() && !error && invalidLrc && shouldShowSynchronizedLyrics && !wordSyncedAvailable,
             enter = slideInVertically { -it },
             exit = slideOutVertically { -it },
             modifier = Modifier.align(Alignment.TopCenter)
@@ -534,7 +589,7 @@ fun Lyrics(
             }
         }
 
-        if (text == null && !error) Column(
+        if (text == null && !error && !wordSyncedAvailable) Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.shimmer()
         ) {
