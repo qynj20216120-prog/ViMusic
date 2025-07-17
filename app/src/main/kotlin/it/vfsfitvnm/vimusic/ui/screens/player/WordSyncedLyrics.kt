@@ -1,12 +1,20 @@
 package it.vfsfitvnm.vimusic.ui.screens.player
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -15,23 +23,22 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import it.vfsfitvnm.core.ui.LocalAppearance
 import it.vfsfitvnm.providers.lyricsplus.LyricsPlusSyncManager
 import it.vfsfitvnm.providers.lyricsplus.models.LyricLine
+import it.vfsfitvnm.vimusic.ui.modifiers.verticalFadingEdge
+import it.vfsfitvnm.vimusic.utils.center
+import it.vfsfitvnm.vimusic.utils.medium
 import kotlinx.coroutines.launch
 
 @Composable
 fun WordSyncedLyrics(
     manager: LyricsPlusSyncManager,
-    modifier: Modifier = Modifier,
-    activeLineColor: Color = MaterialTheme.colorScheme.primary,
-    activeWordColor: Color = MaterialTheme.colorScheme.secondary,
-    inactiveColor: Color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-    fontSize: Int = 16
+    modifier: Modifier = Modifier
 ) {
+    val (colorPalette, typography) = LocalAppearance.current
     val currentLineIndex by manager.currentLineIndex.collectAsState()
     val currentWordIndex by manager.currentWordIndex.collectAsState()
-    val currentPosition by manager.currentPosition.collectAsState()
 
     val lyrics = manager.getLyrics()
     val listState = rememberLazyListState()
@@ -40,7 +47,20 @@ fun WordSyncedLyrics(
     LaunchedEffect(currentLineIndex) {
         if (currentLineIndex >= 0) {
             coroutineScope.launch {
-                listState.animateScrollToItem(currentLineIndex)
+                // Add padding items count to the actual index
+                val targetIndex = currentLineIndex + 1 // +1 for header spacer
+
+                // Get viewport height
+                val viewportHeight = listState.layoutInfo.viewportSize.height
+
+                // Calculate proper offset to center the item
+                val offset = -(viewportHeight / 2)
+
+                // Use animateScrollToItem with proper offset handling
+                listState.animateScrollToItem(
+                    index = targetIndex,
+                    scrollOffset = offset
+                )
             }
         }
     }
@@ -48,12 +68,17 @@ fun WordSyncedLyrics(
     LazyColumn(
         state = listState,
         modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(vertical = 32.dp),
+            .fillMaxWidth()
+            .verticalFadingEdge()
+            .padding(horizontal = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Add substantial padding at the top to allow centering of first items
+        item(key = "header", contentType = 0) {
+            Spacer(modifier = Modifier.height(300.dp)) // Increased height for proper centering
+        }
+
         items(lyrics) { line ->
             val lineIndex = lyrics.indexOf(line)
             val isActiveLine = lineIndex == currentLineIndex
@@ -62,12 +87,13 @@ fun WordSyncedLyrics(
             WordSyncedLyricsLine(
                 line = line,
                 isActive = isActiveLine,
-                currentWordIndex = wordIndex,
-                activeLineColor = activeLineColor,
-                activeWordColor = activeWordColor,
-                inactiveColor = inactiveColor,
-                fontSize = fontSize
+                currentWordIndex = wordIndex
             )
+        }
+
+        // Add substantial padding at the bottom to allow centering of last items
+        item(key = "footer", contentType = 0) {
+            Spacer(modifier = Modifier.height(300.dp)) // Increased height for proper centering
         }
     }
 }
@@ -76,36 +102,36 @@ fun WordSyncedLyrics(
 private fun WordSyncedLyricsLine(
     line: LyricLine,
     isActive: Boolean,
-    currentWordIndex: Int,
-    activeLineColor: Color,
-    activeWordColor: Color,
-    inactiveColor: Color,
-    fontSize: Int
+    currentWordIndex: Int
 ) {
+    val (colorPalette, typography) = LocalAppearance.current
+
     val annotated = buildAnnotatedString {
         line.words.forEachIndexed { index, word ->
-            val color = when {
-                index == currentWordIndex -> activeWordColor
-                isActive -> activeLineColor
-                else -> inactiveColor
-            }
+            val isActiveWord = index == currentWordIndex && isActive
+            val color by animateColorAsState(
+                targetValue = if (isActiveWord || (isActive && currentWordIndex == -1)) Color.White
+                else colorPalette.textDisabled,
+                label = "word_color"
+            )
 
             val weight = when {
-                index == currentWordIndex -> FontWeight.Bold
+                isActiveWord -> FontWeight.Bold
                 isActive -> FontWeight.Medium
                 else -> FontWeight.Normal
             }
 
             withStyle(style = SpanStyle(color = color, fontWeight = weight)) {
                 append(word.text)
-                append(" ")
+                if (index < line.words.lastIndex) append(" ") // Added space between words
             }
         }
     }
 
-    Text(
+    BasicText(
         text = annotated,
-        fontSize = fontSize.sp,
+        style = typography.xs.center.medium,
         modifier = Modifier.fillMaxWidth()
+            .padding(vertical = 4.dp)
     )
 }
