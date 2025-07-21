@@ -4,7 +4,6 @@ import it.vfsfitvnm.providers.lyricsplus.models.LyricLine
 import it.vfsfitvnm.providers.lyricsplus.models.LyricWord
 import it.vfsfitvnm.providers.lyricsplus.models.LyricsResponse
 import io.ktor.client.*
-import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -23,8 +22,6 @@ object LyricsPlus {
     suspend fun fetchLyrics(
         title: String,
         artist: String,
-        album: String? = null,
-        duration: Int? = null
     ): List<LyricLine>? {
         val url = "https://lyricsplus.prjktla.workers.dev/v2/lyrics/get"
 
@@ -32,9 +29,6 @@ object LyricsPlus {
             val response: HttpResponse = client.get(url) {
                 parameter("title", title)
                 parameter("artist", artist)
-                parameter("album", album)
-                parameter("duration", duration)
-                parameter("source", "musixmatch-word")
             }
 
             val responseText = response.bodyAsText()
