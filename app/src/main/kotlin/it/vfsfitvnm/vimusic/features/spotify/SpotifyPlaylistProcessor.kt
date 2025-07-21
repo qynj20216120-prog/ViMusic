@@ -7,7 +7,6 @@ import it.vfsfitvnm.vimusic.models.Song
 import it.vfsfitvnm.vimusic.models.SongPlaylistMap
 import it.vfsfitvnm.vimusic.transaction
 import it.vfsfitvnm.providers.innertube.Innertube
-import it.vfsfitvnm.providers.innertube.models.MusicResponsiveListItemRenderer
 import it.vfsfitvnm.providers.innertube.models.bodies.SearchBody
 import it.vfsfitvnm.providers.innertube.requests.searchPage
 import it.vfsfitvnm.providers.innertube.utils.from
@@ -18,7 +17,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.decodeFromString
 
 @Serializable
 data class SpotifyTrack(
@@ -41,57 +39,64 @@ class SpotifyPlaylistProcessor {
         try {
             val playlistResponse = json.decodeFromString<SpotifyPlaylistResponse>(rawJson)
             val tracks = playlistResponse.tracks
-            Log.d("SpotifyProcessor", "Parsing complete. Starting concurrent search for ${tracks.size} tracks.")
+            Log.d("SpotifyProcessor", "Parsing complete. Starting batched search for ${tracks.size} tracks.")
 
-            val songsToAdd = coroutineScope {
-                val deferredSongs = tracks.map { track ->
-                    async(Dispatchers.IO) {
-                        val searchQuery = "${track.title} ${track.artist}"
+            val songsToAdd = mutableListOf<Song>()
 
-                        val localSong = Database.search("%${track.title}%").firstOrNull()?.firstOrNull { song ->
-                            song.artistsText?.contains(track.artist, ignoreCase = true) == true
-                        }
+            // --- FIX: Process the full list in smaller, safer batches ---
+            val batchSize = 15 // A safe number of concurrent requests.
+            tracks.chunked(batchSize).forEachIndexed { index, batch ->
+                Log.d("SpotifyProcessor", "Processing batch ${index + 1}...")
+                coroutineScope {
+                    val deferredSongsInBatch = batch.map { track ->
+                        async(Dispatchers.IO) {
+                            val searchQuery = "${track.title} ${track.artist}"
 
-                        if (localSong != null) {
-                            Log.d("SpotifyProcessor", "Found local match for \"$searchQuery\"")
-                            return@async localSong
-                        }
-
-                        val searchCandidates = Innertube.searchPage(
-                            body = SearchBody(query = searchQuery, params = Innertube.SearchFilter.Song.value)
-                        ) { content ->
-                            content.musicResponsiveListItemRenderer?.let { renderer ->
-                                Innertube.SongItem.from(renderer)
+                            val localSong = Database.search("%${track.title}%").firstOrNull()?.firstOrNull { song ->
+                                song.artistsText?.contains(track.artist, ignoreCase = true) == true
                             }
-                        }?.getOrNull()?.items
 
-                        if (searchCandidates.isNullOrEmpty()) {
-                            Log.w("SpotifyProcessor", "Online search returned no results for \"$searchQuery\"")
-                            return@async null
-                        }
+                            if (localSong != null) {
+                                return@async localSong
+                            }
 
-                        val bestMatch = findBestMatchInResults(track, searchCandidates)
+                            val searchCandidates = Innertube.searchPage(
+                                body = SearchBody(query = searchQuery, params = Innertube.SearchFilter.Song.value)
+                            ) { content ->
+                                content.musicResponsiveListItemRenderer?.let { renderer ->
+                                    Innertube.SongItem.from(renderer)
+                                }
+                            }?.getOrNull()?.items
 
-                        if (bestMatch != null) {
-                            Song(
-                                id = bestMatch.info?.endpoint?.videoId ?: "",
-                                title = bestMatch.info?.name ?: "",
-                                artistsText = bestMatch.authors?.joinToString { it.name.toString() },
-                                durationText = bestMatch.durationText,
-                                thumbnailUrl = bestMatch.thumbnail?.url,
-                                explicit = bestMatch.explicit
-                            ).takeIf { it.id.isNotEmpty() }
-                        } else {
-                            Log.w("SpotifyProcessor", "No suitable match found for \"$searchQuery\"")
-                            null
+                            if (searchCandidates.isNullOrEmpty()) {
+                                return@async null
+                            }
+
+                            val bestMatch = findBestMatchInResults(track, searchCandidates)
+
+                            if (bestMatch != null) {
+                                Song(
+                                    id = bestMatch.info?.endpoint?.videoId ?: "",
+                                    title = bestMatch.info?.name ?: "",
+                                    artistsText = bestMatch.authors?.joinToString { it.name.toString() },
+                                    durationText = bestMatch.durationText,
+                                    thumbnailUrl = bestMatch.thumbnail?.url,
+                                    explicit = bestMatch.explicit
+                                ).takeIf { it.id.isNotEmpty() }
+                            } else {
+                                Log.w("SpotifyProcessor", "No suitable match found for \"$searchQuery\"")
+                                null
+                            }
                         }
                     }
-                }
 
-                deferredSongs.awaitAll().filterNotNull()
+                    // Add the results from the completed batch to the main list
+                    songsToAdd.addAll(deferredSongsInBatch.awaitAll().filterNotNull())
+                }
+                Log.d("SpotifyProcessor", "Batch ${index + 1} complete. Total songs found: ${songsToAdd.size}")
             }
 
-            Log.d("SpotifyProcessor", "All searches complete. Found ${songsToAdd.size} songs to import.")
+            Log.d("SpotifyProcessor", "All batches complete. Found ${songsToAdd.size} total songs to import.")
 
             transaction {
                 val newPlaylist = Playlist(name = playlistName)
@@ -124,13 +129,8 @@ class SpotifyPlaylistProcessor {
             candidate to calculateMatchScore(spotifyTrack, candidate)
         }
 
-        Log.d("SpotifyProcessor", "Candidates for '${spotifyTrack.title}':")
-        scoredCandidates.forEach { (candidate, score) ->
-            Log.d("SpotifyProcessor", "  - Score: $score, Title: ${candidate.info?.name}")
-        }
-
         return scoredCandidates
-            .filter { (_, score) -> score > 0 } // Any song with a score of 0 is invalid
+            .filter { (_, score) -> score > 0 }
             .maxByOrNull { (_, score) -> score }
             ?.first
     }
@@ -139,35 +139,28 @@ class SpotifyPlaylistProcessor {
         val candidateTitle = candidate.info?.name?.lowercase() ?: return 0
         val candidateArtists = candidate.authors?.joinToString { it.name.toString() }?.lowercase() ?: ""
 
-        // --- Gate #1: Check Artist ---
         val primarySpotifyArtist = spotifyTrack.artist.split(",")[0].trim().lowercase()
         if (!candidateArtists.contains(primarySpotifyArtist)) {
-            return 0 // DISQUALIFIED
+            return 0
         }
 
-        // --- Gate #2: Check for Bad Keywords ---
         val badKeywords = listOf(
             "cover", "remix", "live", "instrumental", "karaoke", "reaction",
              "lyrics", "unplugged", "acoustic", "reverb", "slowed"
         )
         if (badKeywords.any { candidateTitle.contains(it) }) {
-            return 0 // DISQUALIFIED
+            return 0
         }
 
-        // --- Gate #3: Check if Title is Contained ---
         val cleanedSpotifyTitle = spotifyTrack.title.substringBefore(" (").substringBefore(" -").trim().lowercase()
         if (!candidateTitle.contains(cleanedSpotifyTitle)) {
-            return 0 // DISQUALIFIED
+            return 0
         }
 
-        // --- If all gates passed, calculate a positive score ---
         var score = 100
-
-        // Penalize extra characters in the title. A perfect match gets no penalty.
         val lengthDifference = candidateTitle.length - cleanedSpotifyTitle.length
         score -= lengthDifference
 
-        // Give a bonus for a perfect, exact match.
         if (candidateTitle == cleanedSpotifyTitle) {
             score += 10
         }
