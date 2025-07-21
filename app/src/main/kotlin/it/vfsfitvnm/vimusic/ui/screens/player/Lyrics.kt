@@ -216,9 +216,7 @@ fun Lyrics(
 
                                 val wordLevelLyrics = LyricsPlus.fetchLyrics(
                                     title = title,
-                                    artist = artist,
-                                    album = album,
-                                    duration = duration.toInt()
+                                    artist = artist
                                 )
 
                                 if (!wordLevelLyrics.isNullOrEmpty()) {
@@ -271,9 +269,7 @@ fun Lyrics(
                                 // ✅ Try LyricsPlus word-level first
                                 val wordLevelLyrics = LyricsPlus.fetchLyrics(
                                     title = title,
-                                    artist = artist,
-                                    album = album,
-                                    duration = duration.toInt()
+                                    artist = artist
                                 )
 
                                 if (!wordLevelLyrics.isNullOrEmpty()) {
@@ -639,8 +635,6 @@ fun Lyrics(
                                             if (shouldShowSynchronizedLyrics) R.string.show_unsynchronized_lyrics
                                             else R.string.show_synchronized_lyrics
                                         ),
-                                        secondaryText = if (shouldShowSynchronizedLyrics) null
-                                        else stringResource(R.string.provided_lyrics_by),
                                         onClick = {
                                             menuState.hide()
                                             setShouldShowSynchronizedLyrics(!shouldShowSynchronizedLyrics)
