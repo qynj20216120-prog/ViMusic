@@ -1,11 +1,13 @@
 [versions]
 converterGson = "3.0.0"
 kotlin = "2.1.20"
+kotlinxSerializationJson = "1.9.0"
 ksp = "2.1.20-2.0.1"
 
 jvm = "23"
 agp = "8.9.2"
 
+ktorClientCio = "2.3.11"
 loggingInterceptor = "5.1.0"
 room = "2.7.1"
 media3 = "1.6.1"
@@ -55,6 +57,8 @@ compose_lottie = { module = "com.airbnb.android:lottie-compose", version = "6.4.
 coil_compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil_ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
 
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+ktor-client-cio-v2311 = { module = "io.ktor:ktor-client-cio", version.ref = "ktorClientCio" }
 logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "loggingInterceptor" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "converterGson" }
 room = { module = "androidx.room:room-ktx", version.ref = "room" }

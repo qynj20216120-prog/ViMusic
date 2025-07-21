@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.ksp)
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.20"
 }
 
 android {
@@ -169,6 +170,7 @@ dependencies {
     implementation(libs.slf4j)
     implementation(libs.logback)
 
+    implementation(projects.providers.common)
     implementation(projects.providers.github)
     implementation(projects.providers.innertube)
     implementation(projects.providers.kugou)
@@ -179,6 +181,8 @@ dependencies {
     implementation(projects.providers.translate)
     implementation(projects.core.data)
     implementation(projects.core.ui)
+    implementation(libs.ktor.client.cio.v2311)
+    implementation(libs.kotlinx.serialization.json)
 
     detektPlugins(libs.detekt.compose)
     detektPlugins(libs.detekt.formatting)

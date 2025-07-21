@@ -1,5 +1,7 @@
 package it.vfsfitvnm.vimusic.ui.screens.settings
 
+import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -30,9 +32,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.credentials.CredentialManager
+import it.vfsfitvnm.compose.persist.persistList
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.providers.piped.Piped
+import it.vfsfitvnm.providers.piped.models.Instance
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalCredentialManager
 import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.features.spotify.Spotify
+import it.vfsfitvnm.vimusic.features.spotify.SpotifyPlaylistProcessor
 import it.vfsfitvnm.vimusic.models.PipedSession
 import it.vfsfitvnm.vimusic.transaction
 import it.vfsfitvnm.vimusic.ui.components.themed.CircularProgressIndicator
@@ -47,13 +55,11 @@ import it.vfsfitvnm.vimusic.utils.center
 import it.vfsfitvnm.vimusic.utils.get
 import it.vfsfitvnm.vimusic.utils.semiBold
 import it.vfsfitvnm.vimusic.utils.upsert
-import it.vfsfitvnm.compose.persist.persistList
-import it.vfsfitvnm.core.ui.LocalAppearance
-import it.vfsfitvnm.providers.piped.Piped
-import it.vfsfitvnm.providers.piped.models.Instance
 import io.ktor.http.Url
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Route
 @Composable
@@ -61,14 +67,121 @@ fun SyncSettings(
     credentialManager: CredentialManager = LocalCredentialManager.current
 ) {
     val coroutineScope = rememberCoroutineScope()
-
     val (colorPalette, typography) = LocalAppearance.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
-
     val pipedSessions by Database.pipedSessions().collectAsState(initial = listOf())
 
     var linkingPiped by remember { mutableStateOf(false) }
+    var showingSpotifyIdDialog by remember { mutableStateOf(false) }
+    var showingNameDialogForJson by remember { mutableStateOf<String?>(null) }
+    var deletingPipedSession: Int? by rememberSaveable { mutableStateOf(null) }
+
+    // Dialog 1: Ask for Spotify Playlist ID
+    if (showingSpotifyIdDialog) {
+        DefaultDialog(onDismiss = { showingSpotifyIdDialog = false }) {
+            var playlistId by rememberSaveable { mutableStateOf("") }
+            var isLoading by remember { mutableStateOf(false) }
+
+            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
+                BasicText(
+                    text = stringResource(R.string.import_spotify_playlist_title),
+                    style = typography.m.semiBold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                TextField(
+                    value = playlistId,
+                    onValueChange = { playlistId = it },
+                    hintText = stringResource(R.string.playlist_id_hint),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isLoading
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    } else {
+                        DialogTextButton(
+                            text = stringResource(R.string.cancel),
+                            primary = false,
+                            onClick = { showingSpotifyIdDialog = false },
+                            modifier = Modifier.align(Alignment.CenterStart)
+                        )
+                        DialogTextButton(
+                            text = stringResource(R.string.import_text),
+                            primary = true,
+                            enabled = playlistId.isNotBlank(),
+                            onClick = {
+                                isLoading = true
+                                coroutineScope.launch {
+                                    val rawJson = Spotify().getPlaylist(playlistId)
+                                    if (rawJson != null) {
+                                        showingSpotifyIdDialog = false
+                                        showingNameDialogForJson = rawJson
+                                    } else {
+                                        Log.e("SyncSettings", "Failed to fetch Spotify playlist.")
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "Failed to fetch playlist", Toast.LENGTH_SHORT).show()
+                                        }
+                                        isLoading = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.align(Alignment.CenterEnd)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // Dialog 2: Ask for the new playlist's name
+    showingNameDialogForJson?.let { rawJson ->
+        DefaultDialog(onDismiss = { showingNameDialogForJson = null }) {
+            var playlistName by rememberSaveable { mutableStateOf("") }
+
+            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
+                BasicText(
+                    text = stringResource(R.string.name_your_playlist_title),
+                    style = typography.m.semiBold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                TextField(
+                    value = playlistName,
+                    onValueChange = { playlistName = it },
+                    hintText = stringResource(R.string.playlist_name_hint),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    DialogTextButton(
+                        text = stringResource(R.string.cancel),
+                        primary = false,
+                        onClick = { showingNameDialogForJson = null },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    DialogTextButton(
+                        text = stringResource(R.string.create_playlist_button),
+                        primary = true,
+                        enabled = playlistName.isNotBlank(),
+                        onClick = {
+                            coroutineScope.launch {
+                                SpotifyPlaylistProcessor().processAndImportPlaylist(rawJson, playlistName)
+                                withContext(Dispatchers.Main) {
+                                    Toast.makeText(context, "Import for '$playlistName' started", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            showingNameDialogForJson = null
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
+                }
+            }
+        }
+    }
+
     if (linkingPiped) DefaultDialog(
         onDismiss = { linkingPiped = false },
         horizontalAlignment = Alignment.CenterHorizontally
@@ -250,7 +363,6 @@ fun SyncSettings(
         }
     }
 
-    var deletingPipedSession: Int? by rememberSaveable { mutableStateOf(null) }
     if (deletingPipedSession != null) ConfirmationDialog(
         text = stringResource(R.string.confirm_delete_piped_session),
         onDismiss = {
@@ -265,7 +377,13 @@ fun SyncSettings(
 
     SettingsCategoryScreen(title = stringResource(R.string.sync)) {
         SettingsDescription(text = stringResource(R.string.sync_description))
-
+        SettingsGroup(title = stringResource(R.string.spotify)) {
+            SettingsEntry(
+                title = stringResource(R.string.import_from_spotify),
+                text = stringResource(R.string.import_from_spotify_description),
+                onClick = { showingSpotifyIdDialog = true }
+            )
+        }
         SettingsGroup(title = stringResource(R.string.piped)) {
             SettingsEntry(
                 title = stringResource(R.string.add_account),
@@ -281,7 +399,6 @@ fun SyncSettings(
         SettingsGroup(title = stringResource(R.string.piped_sessions)) {
             if (pipedSessions.isEmpty()) {
                 SettingsGroupSpacer()
-
                 BasicText(
                     text = stringResource(R.string.no_items_found),
                     modifier = Modifier.align(Alignment.CenterHorizontally),

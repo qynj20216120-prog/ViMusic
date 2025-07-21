@@ -129,7 +129,6 @@
     <string name="invalid_synchronized_lyrics">Invalid synchronized lyrics, refetch or edit the lyrics and try again</string>
     <string name="show_unsynchronized_lyrics">Show unsynchronized lyrics</string>
     <string name="show_synchronized_lyrics">Show synchronized lyrics</string>
-    <string name="provided_lyrics_by">Provided by lrclib.net &amp; kugou.com</string>
     <string name="edit_lyrics">Edit lyrics</string>
     <string name="search_lyrics_online">Search lyrics online</string>
     <string name="refetch_lyrics">Fetch lyrics again</string>
@@ -366,6 +365,15 @@
     <string name="reverb_large_hall">Large hall</string>
     <string name="reverb_plate">Plate</string>
     <string name="tabs">Tabs</string>
+    <string name="spotify">Spotify</string>
+    <string name="import_from_spotify">Import from Spotify</string>
+    <string name="import_from_spotify_description">Import a playlist using its ID</string>
+    <string name="import_spotify_playlist_title">Import Spotify Playlist</string>
+    <string name="playlist_id_hint">Playlist ID</string>
+    <string name="import_text">Import</string>
+    <string name="playlist_name_hint">New playlist name</string>
+    <string name="name_your_playlist_title">Name your new playlist</string>
+    <string name="create_playlist_button">Create Playlist</string>
     <plurals name="format_reset_blacklist_description">
         <item quantity="one">Remove %1$s song from the blacklist</item>
         <item quantity="other">Remove all %1$s songs from the blacklist</item>
