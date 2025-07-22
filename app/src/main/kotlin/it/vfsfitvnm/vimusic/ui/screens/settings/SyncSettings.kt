@@ -1,24 +1,13 @@
 package it.vfsfitvnm.vimusic.ui.screens.settings
 
-import android.util.Log
 import android.widget.Toast
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,22 +28,14 @@ import it.vfsfitvnm.providers.piped.models.Instance
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalCredentialManager
 import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.features.spotify.ImportStatus
 import it.vfsfitvnm.vimusic.features.spotify.Spotify
 import it.vfsfitvnm.vimusic.features.spotify.SpotifyPlaylistProcessor
 import it.vfsfitvnm.vimusic.models.PipedSession
 import it.vfsfitvnm.vimusic.transaction
-import it.vfsfitvnm.vimusic.ui.components.themed.CircularProgressIndicator
-import it.vfsfitvnm.vimusic.ui.components.themed.ConfirmationDialog
-import it.vfsfitvnm.vimusic.ui.components.themed.ConfirmationDialogBody
-import it.vfsfitvnm.vimusic.ui.components.themed.DefaultDialog
-import it.vfsfitvnm.vimusic.ui.components.themed.DialogTextButton
-import it.vfsfitvnm.vimusic.ui.components.themed.IconButton
-import it.vfsfitvnm.vimusic.ui.components.themed.TextField
+import it.vfsfitvnm.vimusic.ui.components.themed.*
 import it.vfsfitvnm.vimusic.ui.screens.Route
-import it.vfsfitvnm.vimusic.utils.center
-import it.vfsfitvnm.vimusic.utils.get
-import it.vfsfitvnm.vimusic.utils.semiBold
-import it.vfsfitvnm.vimusic.utils.upsert
+import it.vfsfitvnm.vimusic.utils.*
 import io.ktor.http.Url
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +58,9 @@ fun SyncSettings(
     var showingNameDialogForJson by remember { mutableStateOf<String?>(null) }
     var deletingPipedSession: Int? by rememberSaveable { mutableStateOf(null) }
 
+    // --- 1. NEW STATE: This will hold the info and trigger our progress dialog ---
+    var importInfo by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     // Dialog 1: Ask for Spotify Playlist ID
     if (showingSpotifyIdDialog) {
         DefaultDialog(onDismiss = { showingSpotifyIdDialog = false }) {
@@ -90,11 +74,8 @@ fun SyncSettings(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
                 TextField(
-                    value = playlistId,
-                    onValueChange = { playlistId = it },
+                    value = playlistId, onValueChange = { playlistId = it },
                     hintText = stringResource(R.string.playlist_id_hint),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading
                 )
                 Spacer(modifier = Modifier.height(24.dp))
@@ -104,13 +85,11 @@ fun SyncSettings(
                     } else {
                         DialogTextButton(
                             text = stringResource(R.string.cancel),
-                            primary = false,
                             onClick = { showingSpotifyIdDialog = false },
                             modifier = Modifier.align(Alignment.CenterStart)
                         )
                         DialogTextButton(
                             text = stringResource(R.string.import_text),
-                            primary = true,
                             enabled = playlistId.isNotBlank(),
                             onClick = {
                                 isLoading = true
@@ -120,7 +99,6 @@ fun SyncSettings(
                                         showingSpotifyIdDialog = false
                                         showingNameDialogForJson = rawJson
                                     } else {
-                                        Log.e("SyncSettings", "Failed to fetch Spotify playlist.")
                                         withContext(Dispatchers.Main) {
                                             Toast.makeText(context, "Failed to fetch playlist", Toast.LENGTH_SHORT).show()
                                         }
@@ -148,35 +126,106 @@ fun SyncSettings(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
                 TextField(
-                    value = playlistName,
-                    onValueChange = { playlistName = it },
-                    hintText = stringResource(R.string.playlist_name_hint),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    modifier = Modifier.fillMaxWidth()
+                    value = playlistName, onValueChange = { playlistName = it },
+                    hintText = stringResource(R.string.playlist_name_hint)
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
                     DialogTextButton(
                         text = stringResource(R.string.cancel),
-                        primary = false,
                         onClick = { showingNameDialogForJson = null },
                         modifier = Modifier.align(Alignment.CenterStart)
                     )
                     DialogTextButton(
                         text = stringResource(R.string.create_playlist_button),
-                        primary = true,
                         enabled = playlistName.isNotBlank(),
                         onClick = {
-                            coroutineScope.launch {
-                                SpotifyPlaylistProcessor().processAndImportPlaylist(rawJson, playlistName)
-                                withContext(Dispatchers.Main) {
-                                    Toast.makeText(context, "Import for '$playlistName' started", Toast.LENGTH_SHORT).show()
-                                }
-                            }
+                            // --- 2. MODIFIED ONCLICK: This now triggers the progress dialog ---
+                            importInfo = rawJson to playlistName
                             showingNameDialogForJson = null
                         },
                         modifier = Modifier.align(Alignment.CenterEnd)
                     )
+                }
+            }
+        }
+    }
+
+    // --- 3. NEW DIALOG: This is the progress dialog that appears when you click "Create Playlist" ---
+    importInfo?.let { (rawJson, playlistName) ->
+        var importStatus by remember { mutableStateOf<ImportStatus>(ImportStatus.Idle) }
+        val scope = rememberCoroutineScope()
+
+        // This automatically starts the import process when the dialog is shown
+        LaunchedEffect(Unit) {
+            scope.launch {
+                val processor = SpotifyPlaylistProcessor()
+                processor.processAndImportPlaylist(rawJson, playlistName) { statusUpdate ->
+                    importStatus = statusUpdate
+                }
+            }
+        }
+
+        DefaultDialog(
+            onDismiss = {
+                // Only allow dismissing if the import is not running
+                if (importStatus !is ImportStatus.InProgress) {
+                    importInfo = null
+                }
+            }
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
+                val title = when (importStatus) {
+                    is ImportStatus.InProgress -> "Importing Playlist..."
+                    is ImportStatus.Complete -> "Import Complete"
+                    is ImportStatus.Error -> "Import Failed"
+                    is ImportStatus.Idle -> "Starting..."
+                }
+                Text(text = title, style = typography.m.semiBold)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                when (val status = importStatus) {
+                    is ImportStatus.InProgress -> {
+                        val progress by animateFloatAsState(
+                            targetValue = if (status.total > 0) status.processed.toFloat() / status.total else 0f,
+                            label = "ImportProgress"
+                        )
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Processed ${status.processed} of ${status.total} songs",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    is ImportStatus.Complete -> {
+                        Text("Successfully imported ${status.imported} of ${status.total} songs.")
+                        if (status.failed > 0) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Failed to find ${status.failed} songs.")
+                        }
+                    }
+                    is ImportStatus.Error -> {
+                        Text("An error occurred: ${status.message}", color = MaterialTheme.colorScheme.error)
+                    }
+                    is ImportStatus.Idle -> {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Initializing import process...")
+                    }
+                }
+
+                if (importStatus !is ImportStatus.InProgress) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        DialogTextButton(
+                            text = "OK",
+                            onClick = { importInfo = null },
+                            modifier = Modifier.align(Alignment.CenterEnd)
+                        )
+                    }
                 }
             }
         }

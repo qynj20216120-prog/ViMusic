@@ -7,6 +7,7 @@ import it.vfsfitvnm.vimusic.models.Song
 import it.vfsfitvnm.vimusic.models.SongPlaylistMap
 import it.vfsfitvnm.vimusic.transaction
 import it.vfsfitvnm.providers.innertube.Innertube
+import it.vfsfitvnm.providers.innertube.models.MusicResponsiveListItemRenderer
 import it.vfsfitvnm.providers.innertube.models.bodies.SearchBody
 import it.vfsfitvnm.providers.innertube.requests.searchPage
 import it.vfsfitvnm.providers.innertube.utils.from
@@ -17,6 +18,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
 
 @Serializable
 data class SpotifyTrack(
@@ -29,29 +31,45 @@ data class SpotifyPlaylistResponse(
     val tracks: List<SpotifyTrack>
 )
 
+// NEW: A class to represent the state of the import for the UI
+sealed class ImportStatus {
+    data object Idle : ImportStatus()
+    data class InProgress(val processed: Int, val total: Int) : ImportStatus()
+    data class Complete(val imported: Int, val failed: Int, val total: Int) : ImportStatus()
+    data class Error(val message: String) : ImportStatus()
+}
+
 class SpotifyPlaylistProcessor {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
 
-    suspend fun processAndImportPlaylist(rawJson: String, playlistName: String) {
+    // MODIFIED: The function now accepts a lambda `onProgressUpdate` to send status back to the UI.
+    suspend fun processAndImportPlaylist(
+        rawJson: String,
+        playlistName: String,
+        onProgressUpdate: (ImportStatus) -> Unit
+    ) {
         try {
             val playlistResponse = json.decodeFromString<SpotifyPlaylistResponse>(rawJson)
             val tracks = playlistResponse.tracks
-            Log.d("SpotifyProcessor", "Parsing complete. Starting batched search for ${tracks.size} tracks.")
+            val totalTracks = tracks.size
+            Log.d("SpotifyProcessor", "Parsing complete. Starting batched search for $totalTracks tracks.")
 
             val songsToAdd = mutableListOf<Song>()
+            var processedCount = 0
 
-            // --- FIX: Process the full list in smaller, safer batches ---
-            val batchSize = 15 // A safe number of concurrent requests.
+            // Send the initial progress update
+            onProgressUpdate(ImportStatus.InProgress(processed = 0, total = totalTracks))
+
+            val batchSize = 15
             tracks.chunked(batchSize).forEachIndexed { index, batch ->
                 Log.d("SpotifyProcessor", "Processing batch ${index + 1}...")
                 coroutineScope {
                     val deferredSongsInBatch = batch.map { track ->
                         async(Dispatchers.IO) {
                             val searchQuery = "${track.title} ${track.artist}"
-
                             val localSong = Database.instance.search("%${track.title}%").firstOrNull()?.firstOrNull { song ->
                                 song.artistsText?.contains(track.artist, ignoreCase = true) == true
                             }
@@ -73,7 +91,6 @@ class SpotifyPlaylistProcessor {
                             }
 
                             val bestMatch = findBestMatchInResults(track, searchCandidates)
-
                             if (bestMatch != null) {
                                 Song(
                                     id = bestMatch.info?.endpoint?.videoId ?: "",
@@ -89,11 +106,13 @@ class SpotifyPlaylistProcessor {
                             }
                         }
                     }
-
-                    // Add the results from the completed batch to the main list
                     songsToAdd.addAll(deferredSongsInBatch.awaitAll().filterNotNull())
                 }
+
+                processedCount += batch.size
                 Log.d("SpotifyProcessor", "Batch ${index + 1} complete. Total songs found: ${songsToAdd.size}")
+                // Send a progress update to the UI after each batch
+                onProgressUpdate(ImportStatus.InProgress(processed = processedCount, total = totalTracks))
             }
 
             Log.d("SpotifyProcessor", "All batches complete. Found ${songsToAdd.size} total songs to import.")
@@ -101,10 +120,8 @@ class SpotifyPlaylistProcessor {
             transaction {
                 val newPlaylist = Playlist(name = playlistName)
                 val newPlaylistId = Database.instance.insert(newPlaylist)
-
                 if (newPlaylistId != -1L) {
                     Log.d("SpotifyProcessor", "Successfully created playlist '$playlistName' with ID: $newPlaylistId")
-
                     songsToAdd.forEachIndexed { index, song ->
                         Database.instance.insert(song)
                         val songPlaylistMap = SongPlaylistMap(
@@ -119,8 +136,13 @@ class SpotifyPlaylistProcessor {
                     Log.e("SpotifyProcessor", "Failed to create playlist '$playlistName'. It might already exist.")
                 }
             }
+
+            val failedCount = totalTracks - songsToAdd.size
+            onProgressUpdate(ImportStatus.Complete(imported = songsToAdd.size, failed = failedCount, total = totalTracks))
+
         } catch (e: Exception) {
             Log.e("SpotifyProcessor", "An error occurred during the import process.", e)
+            onProgressUpdate(ImportStatus.Error(e.message ?: "Unknown error"))
         }
     }
 
