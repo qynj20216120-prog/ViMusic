@@ -75,13 +75,13 @@ fun BuiltInPlaylistSongs(
 
     LaunchedEffect(binder, sortBy, sortOrder) {
         when (builtInPlaylist) {
-            BuiltInPlaylist.Favorites -> Database.favorites(
+            BuiltInPlaylist.Favorites -> Database.instance.favorites(
                 sortBy = sortBy,
                 sortOrder = sortOrder
             )
 
             BuiltInPlaylist.Offline ->
-                Database
+                Database.instance
                     .songsWithContentLength(
                         sortBy = sortBy,
                         sortOrder = sortOrder
@@ -94,11 +94,11 @@ fun BuiltInPlaylistSongs(
                 flow = topListPeriodProperty.stateFlow,
                 flow2 = topListLengthProperty.stateFlow
             ) { period, length -> period to length }.flatMapLatest { (period, length) ->
-                if (period.duration == null) Database
+                if (period.duration == null) Database.instance
                     .songsByPlayTimeDesc(limit = length)
                     .distinctUntilChanged()
                     .cancellable()
-                else Database
+                else Database.instance
                     .trending(
                         limit = length,
                         period = period.duration.inWholeMilliseconds
@@ -107,7 +107,7 @@ fun BuiltInPlaylistSongs(
                     .cancellable()
             }
 
-            BuiltInPlaylist.History -> Database.history()
+            BuiltInPlaylist.History -> Database.instance.history()
         }.collect { songs = it.toImmutableList() }
     }
 

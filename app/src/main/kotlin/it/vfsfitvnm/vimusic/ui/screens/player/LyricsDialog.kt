@@ -121,7 +121,7 @@ fun LyricsDialog(
                 onDismiss = { },
                 mediaMetadataProvider = currentWindow.mediaItem::mediaMetadata,
                 durationProvider = player::getDuration,
-                ensureSongInserted = { Database.insert(currentWindow.mediaItem) },
+                ensureSongInserted = { Database.instance.insert(currentWindow.mediaItem) },
                 onMenuLaunch = onDismiss,
                 modifier = Modifier.height(maxHeight),
                 shouldKeepScreenAwake = false, // otherwise the keepScreenOn flag resets after dialog closes

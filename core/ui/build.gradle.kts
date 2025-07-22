@@ -20,7 +20,7 @@ android {
     kotlinOptions {
         freeCompilerArgs = freeCompilerArgs + listOf(
             "-Xcontext-receivers",
-            "-Xsuppress-warning=CONTEXT_RECEIVERS_DEPRECATED"
+            "-Xwarning-level=CONTEXT_RECEIVERS_DEPRECATED:disabled"
         )
     }
 }

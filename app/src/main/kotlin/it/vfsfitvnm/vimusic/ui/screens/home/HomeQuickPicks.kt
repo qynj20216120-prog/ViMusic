@@ -120,13 +120,13 @@ fun QuickPicks(
 
         when (DataPreferences.quickPicksSource) {
             DataPreferences.QuickPicksSource.Trending ->
-                Database
+                Database.instance
                     .trending()
                     .distinctUntilChanged()
                     .collect { handleSong(it.firstOrNull()) }
 
             DataPreferences.QuickPicksSource.LastInteraction ->
-                Database
+                Database.instance
                     .events()
                     .distinctUntilChanged()
                     .collect { handleSong(it.firstOrNull()?.song) }
@@ -196,7 +196,7 @@ fun QuickPicks(
                                                     mediaItem = song.asMediaItem,
                                                     onRemoveFromQuickPicks = {
                                                         query {
-                                                            Database.clearEventsFor(song.id)
+                                                            Database.instance.clearEventsFor(song.id)
                                                         }
                                                     }
                                                 )

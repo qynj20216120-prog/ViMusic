@@ -104,7 +104,7 @@ fun PlaylistSongList(
         onAccept = { text ->
             query {
                 transaction {
-                    val playlistId = Database.insert(
+                    val playlistId = Database.instance.insert(
                         Playlist(
                             name = text,
                             browseId = browseId,
@@ -114,14 +114,14 @@ fun PlaylistSongList(
 
                     playlistPage?.songsPage?.items
                         ?.map(Innertube.SongItem::asMediaItem)
-                        ?.onEach(Database::insert)
+                        ?.onEach(Database.instance::insert)
                         ?.mapIndexed { index, mediaItem ->
                             SongPlaylistMap(
                                 songId = mediaItem.mediaId,
                                 playlistId = playlistId,
                                 position = index
                             )
-                        }?.let(Database::insertSongPlaylistMaps)
+                        }?.let(Database.instance::insertSongPlaylistMaps)
                 }
             }
         }

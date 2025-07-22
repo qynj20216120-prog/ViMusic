@@ -57,7 +57,7 @@ fun ArtistLocalSongs(
     var songs by persist<List<Song>?>("artist/$browseId/localSongs")
 
     LaunchedEffect(Unit) {
-        Database.artistSongs(browseId).collect { songs = it }
+        Database.instance.artistSongs(browseId).collect { songs = it }
     }
 
     val lazyListState = rememberLazyListState()

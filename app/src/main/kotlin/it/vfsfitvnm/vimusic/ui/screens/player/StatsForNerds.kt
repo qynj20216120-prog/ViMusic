@@ -91,8 +91,8 @@ fun StatsForNerds(
                         .player(PlayerBody(videoId = mediaId))
                         ?.onSuccess { response ->
                             response?.streamingData?.highestQualityFormat?.let { format ->
-                                Database.insert(mediaItem)
-                                Database.insert(
+                                Database.instance.insert(mediaItem)
+                                Database.instance.insert(
                                     Format(
                                         songId = mediaId,
                                         itag = format.itag,
@@ -112,7 +112,7 @@ fun StatsForNerds(
     LaunchedEffect(binder, mediaId) {
         val currentBinder = binder ?: return@LaunchedEffect
 
-        Database
+        Database.instance
             .format(mediaId)
             .distinctUntilChanged()
             .collectLatest { currentFormat ->

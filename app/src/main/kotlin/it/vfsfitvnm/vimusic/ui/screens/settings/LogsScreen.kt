@@ -57,6 +57,7 @@ import it.vfsfitvnm.core.ui.LocalAppearance
 import it.vfsfitvnm.core.ui.surface
 import it.vfsfitvnm.core.ui.utils.ActivityIntentBundleAccessor
 import kotlinx.coroutines.delay
+import kotlin.time.ExperimentalTime
 
 @Route
 @Composable
@@ -88,6 +89,7 @@ fun LogsScreen() {
     }
 }
 
+@OptIn(ExperimentalTime::class)
 @Composable
 fun LogsList(modifier: Modifier = Modifier) = Box(modifier = modifier.fillMaxSize()) {
     val logs = logcat()
@@ -168,6 +170,7 @@ fun LogsList(modifier: Modifier = Modifier) = Box(modifier = modifier.fillMaxSiz
     )
 }
 
+@OptIn(ExperimentalTime::class)
 @Composable
 fun LazyItemScope.FormattedLine(
     line: Logcat.FormattedLine,

@@ -73,7 +73,7 @@ fun ArtistScreen(browseId: String) {
     var artistPage by persist<Innertube.ArtistPage?>("artist/$browseId/artistPage")
 
     LaunchedEffect(Unit) {
-        Database
+        Database.instance
             .artist(browseId)
             .combine(
                 flow = artistScreenTabIndexProperty.stateFlow.map { it != 4 },
@@ -89,7 +89,7 @@ fun ArtistScreen(browseId: String) {
                             ?.onSuccess { currentArtistPage ->
                                 artistPage = currentArtistPage
 
-                                Database.upsert(
+                                Database.instance.upsert(
                                     Artist(
                                         id = browseId,
                                         name = currentArtistPage.name,
@@ -139,7 +139,7 @@ fun ArtistScreen(browseId: String) {
                                     query {
                                         artist
                                             ?.copy(bookmarkedAt = bookmarkedAt)
-                                            ?.let(Database::update)
+                                            ?.let(Database.instance::update)
                                     }
                                 }
                             )

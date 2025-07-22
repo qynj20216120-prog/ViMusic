@@ -82,7 +82,7 @@ fun HomeLocalSongs(onSearchClick: () -> Unit) = with(OrderPreferences) {
     if (hasPermission) HomeSongs(
         onSearchClick = onSearchClick,
         songProvider = {
-            Database.songs(
+            Database.instance.songs(
                 sortBy = localSongSortBy,
                 sortOrder = localSongSortOrder,
                 isLocal = true
@@ -153,5 +153,5 @@ fun Context.musicFilesAsFlow(): StateFlow<List<Song>> = flow {
         delay(5.seconds)
     }
 }.distinctUntilChanged()
-    .onEach { songs -> transaction { songs.forEach(Database::insert) } }
+    .onEach { songs -> transaction { songs.forEach(Database.instance::insert) } }
     .stateIn(mediaScope, SharingStarted.Eagerly, listOf())

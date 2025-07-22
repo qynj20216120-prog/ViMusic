@@ -102,7 +102,7 @@ fun OtherSettings() {
     )
 
     val queriesCount by remember {
-        Database.queriesCount().distinctUntilChanged()
+        Database.instance.queriesCount().distinctUntilChanged()
     }.collectAsState(initial = 0)
 
     SettingsCategoryScreen(
@@ -137,7 +137,7 @@ fun OtherSettings() {
                         queriesCount
                     )
                     else stringResource(R.string.empty_history),
-                    onClick = { query(Database::clearQueries) },
+                    onClick = { query(Database.instance::clearQueries) },
                     isEnabled = queriesCount > 0
                 )
             }

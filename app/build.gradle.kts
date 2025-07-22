@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.ksp)
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.1.20"
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -101,7 +101,7 @@ kotlin {
             "-Xcontext-receivers",
             "-Xnon-local-break-continue",
             "-Xconsistent-data-class-copy-visibility",
-            "-Xsuppress-warning=CONTEXT_RECEIVERS_DEPRECATED"
+            "-Xwarning-level=CONTEXT_RECEIVERS_DEPRECATED:disabled"
         )
     }
 }
@@ -181,9 +181,9 @@ dependencies {
     implementation(projects.providers.translate)
     implementation(projects.core.data)
     implementation(projects.core.ui)
-    implementation(libs.ktor.client.cio.v2311)
+    implementation(libs.ktor.client.cio)
     implementation(libs.kotlinx.serialization.json)
-
+    implementation(libs.kotlinx.datetime)
     detektPlugins(libs.detekt.compose)
     detektPlugins(libs.detekt.formatting)
 }

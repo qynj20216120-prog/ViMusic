@@ -138,8 +138,8 @@ fun InPlaylistMediaItemMenu(
     onDismiss = onDismiss,
     onRemoveFromPlaylist = {
         transaction {
-            Database.move(playlistId, positionInPlaylist, Int.MAX_VALUE)
-            Database.delete(SongPlaylistMap(song.id, playlistId, Int.MAX_VALUE))
+            Database.instance.move(playlistId, positionInPlaylist, Int.MAX_VALUE)
+            Database.instance.delete(SongPlaylistMap(song.id, playlistId, Int.MAX_VALUE))
         }
     },
     modifier = modifier
@@ -224,11 +224,11 @@ fun BaseMediaItemMenu(
         onEnqueue = onEnqueue,
         onAddToPlaylist = { playlist, position ->
             transaction {
-                Database.insert(mediaItem)
-                Database.insert(
+                Database.instance.insert(mediaItem)
+                Database.instance.insert(
                     SongPlaylistMap(
                         songId = mediaItem.mediaId,
-                        playlistId = Database.insert(playlist).takeIf { it != -1L } ?: playlist.id,
+                        playlistId = Database.instance.insert(playlist).takeIf { it != -1L } ?: playlist.id,
                         position = position
                     )
                 )
@@ -314,16 +314,16 @@ fun MediaItemMenu(
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            if (albumInfo == null) albumInfo = Database.songAlbumInfo(mediaItem.mediaId)
-            if (artistsInfo == null) artistsInfo = Database.songArtistInfo(mediaItem.mediaId)
+            if (albumInfo == null) albumInfo = Database.instance.songAlbumInfo(mediaItem.mediaId)
+            if (artistsInfo == null) artistsInfo = Database.instance.songArtistInfo(mediaItem.mediaId)
 
             launch {
-                Database
+                Database.instance
                     .likedAt(mediaItem.mediaId)
                     .collect { likedAt = it }
             }
             launch {
-                Database
+                Database.instance
                     .blacklisted(mediaItem.mediaId)
                     .collect { isBlacklisted = it }
             }
@@ -343,7 +343,7 @@ fun MediaItemMenu(
     ) { currentIsViewingPlaylists ->
         if (currentIsViewingPlaylists) {
             val playlistPreviews by remember {
-                Database.playlistPreviews(
+                Database.instance.playlistPreviews(
                     sortBy = PlaylistSortBy.DateAdded,
                     sortOrder = SortOrder.Descending
                 )
@@ -427,13 +427,13 @@ fun MediaItemMenu(
                         onClick = {
                             query {
                                 if (
-                                    Database.like(
+                                    Database.instance.like(
                                         songId = mediaItem.mediaId,
                                         likedAt = if (likedAt == null) System.currentTimeMillis() else null
                                     ) != 0
                                 ) return@query
 
-                                Database.insert(mediaItem, Song::toggleLike)
+                                Database.instance.insert(mediaItem, Song::toggleLike)
                             }
                         },
                         modifier = Modifier
@@ -769,8 +769,8 @@ fun MediaItemMenu(
                     else stringResource(R.string.add_to_blacklist),
                     onClick = {
                         transaction {
-                            Database.insert(mediaItem)
-                            Database.toggleBlacklist(mediaItem.mediaId)
+                            Database.instance.insert(mediaItem)
+                            Database.instance.toggleBlacklist(mediaItem.mediaId)
                         }
                     }
                 )

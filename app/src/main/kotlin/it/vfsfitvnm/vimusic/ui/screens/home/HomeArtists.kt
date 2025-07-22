@@ -54,7 +54,7 @@ fun HomeArtistList(
     var items by persistList<Artist>("home/artists")
 
     LaunchedEffect(artistSortBy, artistSortOrder) {
-        Database
+        Database.instance
             .artists(artistSortBy, artistSortOrder)
             .collect { items = it.toImmutableList() }
     }

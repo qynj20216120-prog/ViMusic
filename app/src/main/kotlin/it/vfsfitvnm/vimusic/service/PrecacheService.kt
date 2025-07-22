@@ -255,7 +255,7 @@ class PrecacheService : DownloadService(
 
             transaction {
                 runCatching {
-                    Database.insert(mediaItem)
+                    Database.instance.insert(mediaItem)
                 }.also { if (it.isFailure) return@transaction }
 
                 coroutineScope.launch {

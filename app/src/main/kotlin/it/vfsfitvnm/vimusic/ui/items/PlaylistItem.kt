@@ -89,7 +89,7 @@ fun PlaylistItem(
     val thumbnailSizePx = thumbnailSize.px
     val thumbnails by remember {
         playlist.thumbnail?.let { flowOf(listOf(it)) }
-            ?: Database
+            ?: Database.instance
                 .playlistThumbnailUrls(playlist.playlist.id)
                 .distinctUntilChanged()
                 .map { urls ->

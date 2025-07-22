@@ -89,7 +89,7 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                 )
 
                 MediaId.SONGS ->
-                    Database
+                    Database.instance
                         .songsByPlayTimeDesc(limit = 30)
                         .first()
                         .also { lastSongs = it }
@@ -100,7 +100,7 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                         }
 
                 MediaId.PLAYLISTS ->
-                    Database
+                    Database.instance
                         .playlistPreviewsByDateAddedDesc()
                         .first()
                         .map { it.asBrowserMediaItem }
@@ -113,7 +113,7 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                         }
 
                 MediaId.ALBUMS ->
-                    Database
+                    Database.instance
                         .albumsByRowIdDesc()
                         .first()
                         .map { it.asBrowserMediaItem }
@@ -285,13 +285,13 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                     }
 
                     MediaId.FAVORITES ->
-                        Database
+                        Database.instance
                             .favorites()
                             .first()
                             .shuffled()
 
                     MediaId.OFFLINE ->
-                        Database
+                        Database.instance
                             .songsWithContentLength()
                             .first()
                             .filter { binder.isCached(it) }
@@ -302,10 +302,10 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                         val duration = DataPreferences.topListPeriod.duration
                         val length = DataPreferences.topListLength
 
-                        val flow = if (duration != null) Database.trending(
+                        val flow = if (duration != null) Database.instance.trending(
                             limit = length,
                             period = duration.inWholeMilliseconds
-                        ) else Database
+                        ) else Database.instance
                             .songsByPlayTimeDesc(limit = length)
                             .distinctUntilChanged()
                             .cancellable()
@@ -314,7 +314,7 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                     }
 
                     MediaId.LOCAL ->
-                        Database
+                        Database.instance
                             .songs(
                                 sortBy = OrderPreferences.localSongSortBy,
                                 sortOrder = OrderPreferences.localSongSortOrder,
@@ -327,7 +327,7 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                         data
                             .getOrNull(1)
                             ?.toLongOrNull()
-                            ?.let(Database::playlistWithSongs)
+                            ?.let(Database.instance::playlistWithSongs)
                             ?.first()
                             ?.songs
                             ?.shuffled()
@@ -335,7 +335,7 @@ class PlayerMediaBrowserService : MediaBrowserService(), ServiceConnection {
                     MediaId.ALBUMS ->
                         data
                             .getOrNull(1)
-                            ?.let(Database::albumSongs)
+                            ?.let(Database.instance::albumSongs)
                             ?.first()
 
                     else -> emptyList()

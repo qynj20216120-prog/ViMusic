@@ -114,7 +114,7 @@ fun LocalPlaylistSongs(
         key = songs,
         onDragEnd = { fromIndex, toIndex ->
             transaction {
-                Database.move(playlist.id, fromIndex, toIndex)
+                Database.instance.move(playlist.id, fromIndex, toIndex)
             }
         },
         extraItemCount = 1
@@ -128,7 +128,7 @@ fun LocalPlaylistSongs(
         onDismiss = { isRenaming = false },
         onAccept = { text ->
             query {
-                Database.update(playlist.copy(name = text))
+                Database.instance.update(playlist.copy(name = text))
             }
         }
     )
@@ -140,7 +140,7 @@ fun LocalPlaylistSongs(
         onDismiss = { isDeleting = false },
         onConfirm = {
             query {
-                Database.delete(playlist)
+                Database.instance.delete(playlist)
             }
             onDelete()
         }
@@ -341,12 +341,12 @@ private suspend fun sync(
         BrowseBody(browseId = browseId)
     )?.completed()?.getOrNull()?.let { remotePlaylist ->
         transaction {
-            Database.clearPlaylist(playlist.id)
+            Database.instance.clearPlaylist(playlist.id)
 
             remotePlaylist.songsPage
                 ?.items
                 ?.map { it.asMediaItem }
-                ?.onEach { Database.insert(it) }
+                ?.onEach { Database.instance.insert(it) }
                 ?.mapIndexed { position, mediaItem ->
                     SongPlaylistMap(
                         songId = mediaItem.mediaId,
@@ -354,7 +354,7 @@ private suspend fun sync(
                         position = position
                     )
                 }
-                ?.let(Database::insertSongPlaylistMaps)
+                ?.let(Database.instance::insertSongPlaylistMaps)
         }
     }
 }.onFailure {

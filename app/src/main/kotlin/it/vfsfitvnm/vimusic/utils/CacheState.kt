@@ -90,7 +90,7 @@ fun isCached(
     var format: Format? by remember { mutableStateOf(null) }
 
     LaunchedEffect(mediaId, key) {
-        Database
+        Database.instance
             .format(mediaId)
             .distinctUntilChanged()
             .collect { format = it }

@@ -477,15 +477,15 @@ fun Queue(
                         .clip(16.dp.roundedShape)
                         .clickable {
                             fun addToPlaylist(playlist: Playlist, index: Int) = transaction {
-                                val playlistId = Database
+                                val playlistId = Database.instance
                                     .insert(playlist)
                                     .takeIf { it != -1L } ?: playlist.id
 
                                 windows.forEachIndexed { i, window ->
                                     val mediaItem = window.mediaItem
 
-                                    Database.insert(mediaItem)
-                                    Database.insert(
+                                    Database.instance.insert(mediaItem)
+                                    Database.instance.insert(
                                         SongPlaylistMap(
                                             songId = mediaItem.mediaId,
                                             playlistId = playlistId,
@@ -499,7 +499,7 @@ fun Queue(
                                 var isCreatingNewPlaylist by rememberSaveable { mutableStateOf(false) }
 
                                 val playlistPreviews by remember {
-                                    Database
+                                    Database.instance
                                         .playlistPreviews(
                                             sortBy = PlaylistSortBy.DateAdded,
                                             sortOrder = SortOrder.Descending

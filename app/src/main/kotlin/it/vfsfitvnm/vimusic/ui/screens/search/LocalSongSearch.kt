@@ -60,7 +60,7 @@ fun LocalSongSearch(
 
     LaunchedEffect(textFieldValue.text) {
         if (textFieldValue.text.length > 1)
-            Database
+            Database.instance
                 .search("%${textFieldValue.text}%")
                 .collect { items = it.toImmutableList() }
     }

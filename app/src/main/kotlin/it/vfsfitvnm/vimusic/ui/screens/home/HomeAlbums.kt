@@ -50,7 +50,7 @@ fun HomeAlbums(
     var items by persist<List<Album>>(tag = "home/albums", emptyList())
 
     LaunchedEffect(albumSortBy, albumSortOrder) {
-        Database.albums(albumSortBy, albumSortOrder).collect { items = it }
+        Database.instance.albums(albumSortBy, albumSortOrder).collect { items = it }
     }
 
     val sortOrderIconRotation by animateFloatAsState(

@@ -99,7 +99,7 @@ fun HomeSongs(
     HomeSongs(
         onSearchClick = onSearchClick,
         songProvider = {
-            Database.songs(songSortBy, songSortOrder)
+            Database.instance.songs(songSortBy, songSortOrder)
                 .map { songs -> songs.filter { it.totalPlayTimeMs > 0L } }
         },
         sortBy = songSortBy,
@@ -275,7 +275,7 @@ fun HomeSongs(
                                     hidingSong = song.id
                                 else {
                                     if (!song.isLocal) binder?.cache?.removeResource(song.id)
-                                    transaction { Database.delete(song) }
+                                    transaction { Database.instance.delete(song) }
                                 }
                                 animationJob.join()
                             } else it
@@ -336,7 +336,7 @@ fun HideSongDialog(
             query {
                 runCatching {
                     if (!song.isLocal) binder?.cache?.removeResource(song.id)
-                    Database.delete(song)
+                    Database.instance.delete(song)
                 }
             }
         },

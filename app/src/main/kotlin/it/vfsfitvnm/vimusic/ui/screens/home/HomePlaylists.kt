@@ -80,7 +80,7 @@ fun HomePlaylists(
         onDismiss = { isCreatingANewPlaylist = false },
         onAccept = { text ->
             query {
-                Database.insert(Playlist(name = text))
+                Database.instance.insert(Playlist(name = text))
             }
         }
     )
@@ -88,13 +88,13 @@ fun HomePlaylists(
     var pipedSessions by persist<Map<PipedSession, List<PipedPlaylistPreview>?>>("home/piped")
 
     LaunchedEffect(playlistSortBy, playlistSortOrder) {
-        Database
+        Database.instance
             .playlistPreviews(playlistSortBy, playlistSortOrder)
             .collect { items = it.toImmutableList() }
     }
 
     LaunchedEffect(Unit) {
-        Database.pipedSessions().collect { sessions ->
+        Database.instance.pipedSessions().collect { sessions ->
             pipedSessions = sessions.associateWith { session ->
                 async {
                     Piped.playlist.list(session = session.toApiSession())?.getOrNull()

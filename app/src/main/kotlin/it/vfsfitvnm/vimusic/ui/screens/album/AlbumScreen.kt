@@ -70,11 +70,11 @@ fun AlbumScreen(browseId: String) {
     PersistMapCleanup(prefix = "album/$browseId/")
 
     LaunchedEffect(Unit) {
-        Database
+        Database.instance
             .albumSongs(browseId)
             .distinctUntilChanged()
             .combine(
-                Database
+                Database.instance
                     .album(browseId)
                     .distinctUntilChanged()
                     .cancellable()
@@ -91,9 +91,9 @@ fun AlbumScreen(browseId: String) {
                             albumPage = newAlbumPage
 
                             transaction {
-                                Database.clearAlbum(browseId)
+                                Database.instance.clearAlbum(browseId)
 
-                                Database.upsert(
+                                Database.instance.upsert(
                                     album = Album(
                                         id = browseId,
                                         title = newAlbumPage.title,
@@ -111,7 +111,7 @@ fun AlbumScreen(browseId: String) {
                                         .songsPage
                                         ?.items
                                         ?.map { it.asMediaItem }
-                                        ?.onEach { Database.insert(it) }
+                                        ?.onEach { Database.instance.insert(it) }
                                         ?.mapIndexed { position, mediaItem ->
                                             SongAlbumMap(
                                                 songId = mediaItem.mediaId,
@@ -157,7 +157,7 @@ fun AlbumScreen(browseId: String) {
                                 query {
                                     album
                                         ?.copy(bookmarkedAt = bookmarkedAt)
-                                        ?.let(Database::update)
+                                        ?.let(Database.instance::update)
                                 }
                             }
                         )

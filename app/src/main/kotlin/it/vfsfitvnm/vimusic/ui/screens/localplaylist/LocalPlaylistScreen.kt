@@ -37,7 +37,7 @@ fun LocalPlaylistScreen(playlistId: Long) {
             var songs by persistList<Song>("localPlaylist/$playlistId/songs")
 
             LaunchedEffect(Unit) {
-                Database
+                Database.instance
                     .playlist(playlistId)
                     .filterNotNull()
                     .distinctUntilChanged()
@@ -45,7 +45,7 @@ fun LocalPlaylistScreen(playlistId: Long) {
             }
 
             LaunchedEffect(Unit) {
-                Database
+                Database.instance
                     .playlistSongs(playlistId)
                     .filterNotNull()
                     .distinctUntilChanged()

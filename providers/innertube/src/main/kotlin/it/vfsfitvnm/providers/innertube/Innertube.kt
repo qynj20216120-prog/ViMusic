@@ -135,7 +135,7 @@ object Innertube {
                 contentType(ContentType.Application.Json)
                 headers {
                     set("X-Goog-Api-Key", getApiKey())
-                    set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
                     set("Accept", "application/json")
                     set("Accept-Language", "en-US,en;q=0.9")
                     set("Accept-Encoding", "gzip, deflate, br")
@@ -153,7 +153,11 @@ object Innertube {
         "\\bm=([a-zA-Z0-9$]{2,})\\(decodeURIComponent\\(h\\.s\\)\\)".toRegex(),
         "\\bc&&\\(c=([a-zA-Z0-9$]{2,})\\(decodeURIComponent\\(c\\)\\)".toRegex(),
         "(?:\\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,})\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\\s*\"\"\\s*\\)".toRegex(),
-        "([\\w$]+)\\s*=\\s*function\\((\\w+)\\)\\{\\s*\\2=\\s*\\2\\.split\\(\"\"\\)\\s*;".toRegex()
+        "([\\w$]+)\\s*=\\s*function\\((\\w+)\\)\\{\\s*\\2=\\s*\\2\\.split\\(\"\"\\)\\s*;".toRegex(),
+        "([a-zA-Z0-9\$]+)\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\"\"\\);".toRegex(),
+        "\\bc&&\\(c=([a-zA-Z0-9\$]{2,})\\(decodeURIComponent\\(c\\)\\)\\)".toRegex(),
+        "\\b([a-zA-Z0-9\$]{2,})\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\"\"\\)".toRegex(),
+        "\\bm=([a-zA-Z0-9\$]{2,})\\(decodeURIComponent\\(h\\.s\\)\\)".toRegex()
     )
 
     private suspend fun getJavaScriptChallenge(context: Context): JavaScriptChallenge? {

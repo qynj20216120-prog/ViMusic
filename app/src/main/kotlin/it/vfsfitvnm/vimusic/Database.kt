@@ -64,7 +64,10 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 @Suppress("TooManyFunctions")
 interface Database {
-    companion object : Database by DatabaseInitializer.instance.database
+    companion object {
+        val instance: Database
+            get() = DatabaseInitializer.instance.database
+    }
 
     @Transaction
     @Query("SELECT * FROM Song WHERE id NOT LIKE '$LOCAL_KEY_PREFIX%' ORDER BY ROWID ASC")

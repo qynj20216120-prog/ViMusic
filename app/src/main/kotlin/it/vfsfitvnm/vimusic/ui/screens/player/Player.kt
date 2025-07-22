@@ -139,7 +139,7 @@ fun Player(
                 override fun equivalent(a: Long?, b: Long?): Boolean {
                     mediaItem?.mediaId?.let {
                         query {
-                            Database.like(it, b)
+                            Database.instance.like(it, b)
                         }
                     }
                     return a == b
@@ -150,7 +150,7 @@ fun Player(
 
     LaunchedEffect(mediaItem) {
         mediaItem?.mediaId?.let { mediaId ->
-            Database
+            Database.instance
                 .likedAt(mediaId)
                 .distinctUntilChanged()
                 .collect { likedAt = it }
@@ -505,7 +505,7 @@ fun Player(
         if (boostDialogOpen) {
             fun submit(state: Float) = transaction {
                 mediaItem?.mediaId?.let { mediaId ->
-                    Database.setLoudnessBoost(
+                    Database.instance.setLoudnessBoost(
                         songId = mediaId,
                         loudnessBoost = state.takeUnless { it == 0f }
                     )
@@ -522,7 +522,7 @@ fun Player(
 
                         LaunchedEffect(mediaItem) {
                             mediaItem?.mediaId?.let { mediaId ->
-                                Database
+                                Database.instance
                                     .loudnessBoost(mediaId)
                                     .distinctUntilChanged()
                                     .collect { state.floatValue = it ?: 0f }

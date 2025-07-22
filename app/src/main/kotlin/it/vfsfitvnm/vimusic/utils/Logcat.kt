@@ -25,8 +25,8 @@ import kotlinx.datetime.format.char
 import kotlinx.datetime.toInstant
 import kotlinx.parcelize.Parceler
 import kotlinx.parcelize.Parcelize
-import kotlinx.parcelize.WriteWith
 import java.io.IOException
+import kotlin.time.ExperimentalTime
 
 private val logcatDateTimeFormat = LocalDateTime.Format {
     date(
@@ -64,6 +64,7 @@ sealed interface Logcat : Parcelable {
         private val regex = "^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}.\\d{3})\\s+(\\w)/(.+?)\\(\\s*(\\d+)\\): (.*)$".toRegex()
         // @formatter:on
 
+        @OptIn(ExperimentalTime::class)
         private fun String.toLine(id: Int) = runCatching {
             val results = regex.find(this)?.groups ?: return@runCatching null
             val (timestamp, level, tag, pid, message) = results.drop(1).take(5)
@@ -99,7 +100,7 @@ sealed interface Logcat : Parcelable {
             while (ctx.isActive) {
                 try {
                     emit((reader.readLine() ?: break).toLine(id++))
-                } catch (e: IOException) {
+                } catch (_: IOException) {
                     break
                 }
             }
@@ -110,8 +111,8 @@ sealed interface Logcat : Parcelable {
 
     @Immutable
     @Parcelize
-    data class FormattedLine(
-        val timestamp: @WriteWith<InstantParceler> Instant,
+    data class FormattedLine @OptIn(ExperimentalTime::class) constructor(
+        val timestamp: kotlin.time.Instant,
         val level: Level,
         val tag: String,
         val pid: Long,

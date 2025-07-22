@@ -207,7 +207,7 @@ fun Thumbnail(
                 mediaId = currentWindow.mediaItem.mediaId,
                 isDisplayed = isShowingLyrics && error == null,
                 onDismiss = { onShowLyrics(false) },
-                ensureSongInserted = { Database.insert(currentWindow.mediaItem) },
+                ensureSongInserted = { Database.instance.insert(currentWindow.mediaItem) },
                 mediaMetadataProvider = currentWindow.mediaItem::mediaMetadata,
                 durationProvider = { binder?.player?.duration ?: C.TIME_UNSET },
                 onOpenDialog = onOpenDialog,

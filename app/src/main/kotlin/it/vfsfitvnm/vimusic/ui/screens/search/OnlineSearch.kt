@@ -86,7 +86,7 @@ fun OnlineSearch(
     LaunchedEffect(textFieldValue.text) {
         if (DataPreferences.pauseSearchHistory) return@LaunchedEffect
 
-        Database.queries("%${textFieldValue.text}%")
+        Database.instance.queries("%${textFieldValue.text}%")
             .distinctUntilChanged { old, new -> old.size == new.size }
             .collect { history = it.toImmutableList() }
     }
@@ -220,7 +220,7 @@ fun OnlineSearch(
                             interactionSource = remember { MutableInteractionSource() },
                             onClick = {
                                 query {
-                                    Database.delete(searchQuery)
+                                    Database.instance.delete(searchQuery)
                                 }
                             }
                         )

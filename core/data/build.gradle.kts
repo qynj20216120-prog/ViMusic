@@ -24,7 +24,7 @@ kotlin {
             "-Xcontext-receivers",
             "-Xnon-local-break-continue",
             "-Xconsistent-data-class-copy-visibility",
-            "-Xsuppress-warning=CONTEXT_RECEIVERS_DEPRECATED"
+            "-Xwarning-level=CONTEXT_RECEIVERS_DEPRECATED:disabled"
         )
     }
 }

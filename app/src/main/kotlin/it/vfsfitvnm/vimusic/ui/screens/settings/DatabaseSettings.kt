@@ -35,10 +35,10 @@ import kotlin.system.exitProcess
 fun DatabaseSettings() = with(DataPreferences) {
     val context = LocalContext.current
 
-    val eventsCount by remember { Database.eventsCount().distinctUntilChanged() }
+    val eventsCount by remember { Database.instance.eventsCount().distinctUntilChanged() }
         .collectAsState(initial = 0)
 
-    val blacklistLength by remember { Database.blacklistLength().distinctUntilChanged() }
+    val blacklistLength by remember { Database.instance.blacklistLength().distinctUntilChanged() }
         .collectAsState(initial = 0)
 
     val backupLauncher = rememberLauncherForActivityResult(
@@ -47,10 +47,10 @@ fun DatabaseSettings() = with(DataPreferences) {
         if (uri == null) return@rememberLauncherForActivityResult
 
         query {
-            Database.checkpoint()
+            Database.instance.checkpoint()
 
             context.applicationContext.contentResolver.openOutputStream(uri)?.use { output ->
-                FileInputStream(Database.internal.path).use { input -> input.copyTo(output) }
+                FileInputStream(Database.instance.internal.path).use { input -> input.copyTo(output) }
             }
         }
     }
@@ -61,12 +61,12 @@ fun DatabaseSettings() = with(DataPreferences) {
         if (uri == null) return@rememberLauncherForActivityResult
 
         query {
-            Database.checkpoint()
-            Database.internal.close()
+            Database.instance.checkpoint()
+            Database.instance.internal.close()
 
             context.applicationContext.contentResolver.openInputStream(uri)
                 ?.use { inputStream ->
-                    FileOutputStream(Database.internal.path).use { outputStream ->
+                    FileOutputStream(Database.instance.internal.path).use { outputStream ->
                         inputStream.copyTo(outputStream)
                     }
                 }
@@ -101,7 +101,7 @@ fun DatabaseSettings() = with(DataPreferences) {
                         eventsCount
                     )
                     else stringResource(R.string.quick_picks_empty),
-                    onClick = { query(Database::clearEvents) },
+                    onClick = { query(Database.instance::clearEvents) },
                     isEnabled = eventsCount > 0
                 )
             }
@@ -126,7 +126,7 @@ fun DatabaseSettings() = with(DataPreferences) {
                 isEnabled = blacklistLength > 0,
                 onClick = {
                     transaction {
-                        Database.resetBlacklist()
+                        Database.instance.resetBlacklist()
                     }
                 }
             )

@@ -52,7 +52,7 @@ class SpotifyPlaylistProcessor {
                         async(Dispatchers.IO) {
                             val searchQuery = "${track.title} ${track.artist}"
 
-                            val localSong = Database.search("%${track.title}%").firstOrNull()?.firstOrNull { song ->
+                            val localSong = Database.instance.search("%${track.title}%").firstOrNull()?.firstOrNull { song ->
                                 song.artistsText?.contains(track.artist, ignoreCase = true) == true
                             }
 
@@ -100,19 +100,19 @@ class SpotifyPlaylistProcessor {
 
             transaction {
                 val newPlaylist = Playlist(name = playlistName)
-                val newPlaylistId = Database.insert(newPlaylist)
+                val newPlaylistId = Database.instance.insert(newPlaylist)
 
                 if (newPlaylistId != -1L) {
                     Log.d("SpotifyProcessor", "Successfully created playlist '$playlistName' with ID: $newPlaylistId")
 
                     songsToAdd.forEachIndexed { index, song ->
-                        Database.insert(song)
+                        Database.instance.insert(song)
                         val songPlaylistMap = SongPlaylistMap(
                             songId = song.id,
                             playlistId = newPlaylistId,
                             position = index
                         )
-                        Database.insert(songPlaylistMap)
+                        Database.instance.insert(songPlaylistMap)
                     }
                     Log.d("SpotifyProcessor", "Finished importing ${songsToAdd.size} songs to '$playlistName'.")
                 } else {

@@ -97,7 +97,7 @@ fun RouteHandlerScope.GlobalRoutes() {
                 searchResultRoute(query)
 
                 if (!DataPreferences.pauseSearchHistory) query {
-                    Database.insert(SearchQuery(query = query))
+                    Database.instance.insert(SearchQuery(query = query))
                 }
             },
             onViewPlaylist = { url ->

@@ -13,11 +13,15 @@ android {
         minSdk = 21
     }
 
-    kotlinOptions {
-        freeCompilerArgs = freeCompilerArgs + listOf(
-            "-Xcontext-receivers",
-            "-Xsuppress-warning=CONTEXT_RECEIVERS_DEPRECATED"
-        )
+    kotlin {
+        compilerOptions {
+            freeCompilerArgs.addAll(
+                listOf(
+                    "-Xcontext-receivers",
+                    "-Xwarning-level=CONTEXT_RECEIVERS_DEPRECATED:disabled"
+                )
+            )
+        }
     }
 }
 

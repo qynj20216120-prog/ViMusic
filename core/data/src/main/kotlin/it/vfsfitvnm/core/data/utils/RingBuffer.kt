@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package it.vfsfitvnm.core.data.utils
 
 import android.net.Uri
@@ -6,8 +8,7 @@ import kotlinx.datetime.Instant
 
 open class RingBuffer<T>(val size: Int, private val init: (index: Int) -> T) : Iterable<T> {
     private val list = MutableList(size, init)
-
-    @get:Synchronized
+    
     @set:Synchronized
     private var index = 0
 
