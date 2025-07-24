@@ -155,9 +155,7 @@ object Innertube {
         "(?:\\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,})\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\\s*\"\"\\s*\\)".toRegex(),
         "([\\w$]+)\\s*=\\s*function\\((\\w+)\\)\\{\\s*\\2=\\s*\\2\\.split\\(\"\"\\)\\s*;".toRegex(),
         "([a-zA-Z0-9\$]+)\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\"\"\\);".toRegex(),
-        "\\bc&&\\(c=([a-zA-Z0-9\$]{2,})\\(decodeURIComponent\\(c\\)\\)\\)".toRegex(),
-        "\\b([a-zA-Z0-9\$]{2,})\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\"\"\\)".toRegex(),
-        "\\bm=([a-zA-Z0-9\$]{2,})\\(decodeURIComponent\\(h\\.s\\)\\)".toRegex()
+        "\\b([a-zA-Z0-9\$]{2,})\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\"\"\\)".toRegex()
     )
 
     private suspend fun getJavaScriptChallenge(context: Context): JavaScriptChallenge? {
