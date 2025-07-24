@@ -1,8 +1,13 @@
 package it.vfsfitvnm.vimusic.ui.screens.settings
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -21,15 +26,19 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.credentials.CredentialManager
+import com.spotify.sdk.android.auth.AuthorizationClient
+import com.spotify.sdk.android.auth.AuthorizationResponse
 import it.vfsfitvnm.compose.persist.persistList
 import it.vfsfitvnm.core.ui.LocalAppearance
 import it.vfsfitvnm.providers.piped.Piped
 import it.vfsfitvnm.providers.piped.models.Instance
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalCredentialManager
+import it.vfsfitvnm.vimusic.MainActivity
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.features.spotify.ImportStatus
 import it.vfsfitvnm.vimusic.features.spotify.Spotify
+import it.vfsfitvnm.vimusic.features.spotify.SpotifyPlaylist
 import it.vfsfitvnm.vimusic.features.spotify.SpotifyPlaylistProcessor
 import it.vfsfitvnm.vimusic.models.PipedSession
 import it.vfsfitvnm.vimusic.transaction
@@ -53,73 +62,121 @@ fun SyncSettings(
     val context = LocalContext.current
     val pipedSessions by Database.instance.pipedSessions().collectAsState(initial = listOf())
 
+    val spotify = remember { Spotify(context.applicationContext) }
+    var isLoggedIn by remember { mutableStateOf(spotify.isLoggedIn()) }
+    var username by remember { mutableStateOf(spotify.getUsername()) }
+
+    val spotifyAuthLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val response = AuthorizationClient.getResponse(result.resultCode, result.data)
+        when (response.type) {
+            AuthorizationResponse.Type.TOKEN -> {
+                Toast.makeText(context, context.getString(R.string.login_successful), Toast.LENGTH_SHORT).show()
+                spotify.setToken(response.accessToken)
+
+                coroutineScope.launch {
+                    spotify.fetchAndSaveUserProfile()
+                        .onSuccess {
+                            isLoggedIn = true
+                            username = spotify.getUsername()
+                        }
+                        .onFailure {
+                            Toast.makeText(context, context.getString(R.string.login_failed_profile), Toast.LENGTH_LONG).show()
+                            isLoggedIn = true
+                            username = null
+                        }
+                }
+            }
+            AuthorizationResponse.Type.ERROR -> {
+                Toast.makeText(context, context.getString(R.string.login_failed, response.error), Toast.LENGTH_LONG).show()
+            }
+            else -> {
+                // User cancelled
+            }
+        }
+    }
+
     var linkingPiped by remember { mutableStateOf(false) }
-    var showingSpotifyIdDialog by remember { mutableStateOf(false) }
+    var showingPlaylistSelectionDialog by remember { mutableStateOf(false) }
     var showingNameDialogForJson by remember { mutableStateOf<String?>(null) }
+    var importInfo by remember { mutableStateOf<Pair<String, String>?>(null) }
     var deletingPipedSession: Int? by rememberSaveable { mutableStateOf(null) }
 
-    // --- 1. NEW STATE: This will hold the info and trigger our progress dialog ---
-    var importInfo by remember { mutableStateOf<Pair<String, String>?>(null) }
+    if (showingPlaylistSelectionDialog) {
+        var userPlaylists by remember { mutableStateOf<List<SpotifyPlaylist>>(emptyList()) }
+        var isLoadingPlaylists by remember { mutableStateOf(true) }
+        var error by remember { mutableStateOf<String?>(null) }
+        val loadPlaylistsFailedString = stringResource(R.string.load_playlists_failed)
 
-    // Dialog 1: Ask for Spotify Playlist ID
-    if (showingSpotifyIdDialog) {
-        DefaultDialog(onDismiss = { showingSpotifyIdDialog = false }) {
-            var playlistId by rememberSaveable { mutableStateOf("") }
-            var isLoading by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            spotify.getUserPlaylists()
+                .onSuccess { playlists -> userPlaylists = playlists }
+                .onFailure { throwable -> error = throwable.message ?: loadPlaylistsFailedString }
+            isLoadingPlaylists = false
+        }
 
-            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
-                BasicText(
-                    text = stringResource(R.string.import_spotify_playlist_title),
+        DefaultDialog(onDismiss = { showingPlaylistSelectionDialog = false }) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+                Text(
+                    text = stringResource(R.string.select_a_playlist),
                     style = typography.m.semiBold,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                 )
-                TextField(
-                    value = playlistId, onValueChange = { playlistId = it },
-                    hintText = stringResource(R.string.playlist_id_hint),
-                    enabled = !isLoading
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    if (isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    } else {
-                        DialogTextButton(
-                            text = stringResource(R.string.cancel),
-                            onClick = { showingSpotifyIdDialog = false },
-                            modifier = Modifier.align(Alignment.CenterStart)
-                        )
-                        DialogTextButton(
-                            text = stringResource(R.string.import_text),
-                            enabled = playlistId.isNotBlank(),
-                            onClick = {
-                                isLoading = true
-                                coroutineScope.launch {
-                                    val rawJson = Spotify().getPlaylist(playlistId)
-                                    if (rawJson != null) {
-                                        showingSpotifyIdDialog = false
-                                        showingNameDialogForJson = rawJson
-                                    } else {
-                                        withContext(Dispatchers.Main) {
-                                            Toast.makeText(context, "Failed to fetch playlist", Toast.LENGTH_SHORT).show()
+                when {
+                    isLoadingPlaylists -> Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                    ) { CircularProgressIndicator() }
+
+                    error != null -> Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp)
+                            .padding(horizontal = 24.dp)
+                    ) { Text(error!!, color = MaterialTheme.colorScheme.error) }
+
+                    else -> {
+                        LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                            items(userPlaylists) { playlist ->
+                                Text(
+                                    text = playlist.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                val rawJson = spotify.getPlaylist(playlist.id)
+                                                if (rawJson != null) {
+                                                    showingPlaylistSelectionDialog = false
+                                                    showingNameDialogForJson = rawJson
+                                                } else {
+                                                    withContext(Dispatchers.Main) {
+                                                        Toast
+                                                            .makeText(context, context.getString(R.string.fetch_playlist_details_failed), Toast.LENGTH_SHORT)
+                                                            .show()
+                                                    }
+                                                }
+                                            }
                                         }
-                                        isLoading = false
-                                    }
-                                }
-                            },
-                            modifier = Modifier.align(Alignment.CenterEnd)
-                        )
+                                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // Dialog 2: Ask for the new playlist's name
     showingNameDialogForJson?.let { rawJson ->
         DefaultDialog(onDismiss = { showingNameDialogForJson = null }) {
             var playlistName by rememberSaveable { mutableStateOf("") }
-
-            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .padding(all = 24.dp)) {
                 BasicText(
                     text = stringResource(R.string.name_your_playlist_title),
                     style = typography.m.semiBold,
@@ -132,7 +189,7 @@ fun SyncSettings(
                 Spacer(modifier = Modifier.height(24.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
                     DialogTextButton(
-                        text = stringResource(R.string.cancel),
+                        text = stringResource(R.string.dialog_cancel),
                         onClick = { showingNameDialogForJson = null },
                         modifier = Modifier.align(Alignment.CenterStart)
                     )
@@ -140,7 +197,6 @@ fun SyncSettings(
                         text = stringResource(R.string.create_playlist_button),
                         enabled = playlistName.isNotBlank(),
                         onClick = {
-                            // --- 2. MODIFIED ONCLICK: This now triggers the progress dialog ---
                             importInfo = rawJson to playlistName
                             showingNameDialogForJson = null
                         },
@@ -151,80 +207,64 @@ fun SyncSettings(
         }
     }
 
-    // --- 3. NEW DIALOG: This is the progress dialog that appears when you click "Create Playlist" ---
     importInfo?.let { (rawJson, playlistName) ->
         var importStatus by remember { mutableStateOf<ImportStatus>(ImportStatus.Idle) }
         val scope = rememberCoroutineScope()
+        val unknownErrorString = stringResource(R.string.unknown_error)
 
-        // This automatically starts the import process when the dialog is shown
         LaunchedEffect(Unit) {
             scope.launch {
                 val processor = SpotifyPlaylistProcessor()
-                processor.processAndImportPlaylist(rawJson, playlistName) { statusUpdate ->
+                processor.processAndImportPlaylist(rawJson, playlistName, unknownErrorString) { statusUpdate ->
                     importStatus = statusUpdate
                 }
             }
         }
 
-        DefaultDialog(
-            onDismiss = {
-                // Only allow dismissing if the import is not running
-                if (importStatus !is ImportStatus.InProgress) {
-                    importInfo = null
-                }
+        DefaultDialog(onDismiss = {
+            if (importStatus !is ImportStatus.InProgress) {
+                importInfo = null
             }
-        ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
+        }) {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .padding(all = 24.dp)) {
                 val title = when (importStatus) {
-                    is ImportStatus.InProgress -> "Importing Playlist..."
-                    is ImportStatus.Complete -> "Import Complete"
-                    is ImportStatus.Error -> "Import Failed"
-                    is ImportStatus.Idle -> "Starting..."
+                    is ImportStatus.InProgress -> stringResource(R.string.import_title_in_progress)
+                    is ImportStatus.Complete -> stringResource(R.string.import_title_complete)
+                    is ImportStatus.Error -> stringResource(R.string.import_title_failed)
+                    is ImportStatus.Idle -> stringResource(R.string.import_title_starting)
                 }
                 Text(text = title, style = typography.m.semiBold)
                 Spacer(modifier = Modifier.height(16.dp))
-
                 when (val status = importStatus) {
                     is ImportStatus.InProgress -> {
                         val progress by animateFloatAsState(
                             targetValue = if (status.total > 0) status.processed.toFloat() / status.total else 0f,
                             label = "ImportProgress"
                         )
-                        LinearProgressIndicator(
-                            progress = { progress },
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Processed ${status.processed} of ${status.total} songs",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text(text = stringResource(R.string.import_progress, status.processed, status.total), style = MaterialTheme.typography.bodyMedium)
                     }
                     is ImportStatus.Complete -> {
-                        Text("Successfully imported ${status.imported} of ${status.total} songs.")
+                        Text(stringResource(R.string.import_complete_summary, status.imported, status.total))
                         if (status.failed > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Failed to find ${status.failed} songs.")
+                            Text(stringResource(R.string.import_failed_summary, status.failed))
                         }
                     }
-                    is ImportStatus.Error -> {
-                        Text("An error occurred: ${status.message}", color = MaterialTheme.colorScheme.error)
-                    }
+                    is ImportStatus.Error -> Text(stringResource(R.string.import_error_message, status.message), color = MaterialTheme.colorScheme.error)
                     is ImportStatus.Idle -> {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text("Initializing import process...")
+                        Text(stringResource(R.string.import_initializing))
                     }
                 }
-
                 if (importStatus !is ImportStatus.InProgress) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        DialogTextButton(
-                            text = "OK",
-                            onClick = { importInfo = null },
-                            modifier = Modifier.align(Alignment.CenterEnd)
-                        )
+                        DialogTextButton(text = stringResource(R.string.dialog_ok), onClick = { importInfo = null }, modifier = Modifier.align(Alignment.CenterEnd))
                     }
                 }
             }
@@ -265,7 +305,7 @@ fun SyncSettings(
                     var selectedInstance: Int? by rememberSaveable { mutableStateOf(null) }
                     var username by rememberSaveable { mutableStateOf("") }
                     var password by rememberSaveable { mutableStateOf("") }
-                    var canSelect by rememberSaveable { mutableStateOf(false) }
+                    var canSelect by rememberSaveable { mutableStateOf(true) }
                     var instancesUnavailable by rememberSaveable { mutableStateOf(false) }
                     var customInstance: String? by rememberSaveable { mutableStateOf(null) }
 
@@ -360,7 +400,7 @@ fun SyncSettings(
                         enabled = (customInstance?.isNotBlank() == true || selectedInstance != null) &&
                             username.isNotBlank() && password.isNotBlank(),
                         onClick = {
-                            @Suppress("Wrapping") // thank you ktlint
+                            @Suppress("Wrapping")
                             (customInstance?.let {
                                 runCatching {
                                     Url(it)
@@ -427,11 +467,40 @@ fun SyncSettings(
     SettingsCategoryScreen(title = stringResource(R.string.sync)) {
         SettingsDescription(text = stringResource(R.string.sync_description))
         SettingsGroup(title = stringResource(R.string.spotify)) {
-            SettingsEntry(
-                title = stringResource(R.string.import_from_spotify),
-                text = stringResource(R.string.import_from_spotify_description),
-                onClick = { showingSpotifyIdDialog = true }
-            )
+            if (!isLoggedIn) {
+                SettingsEntry(
+                    title = stringResource(R.string.spotify_login_title),
+                    text = stringResource(R.string.spotify_login_text),
+                    onClick = {
+                        val request = spotify.getAuthenticationRequest()
+                        val intent = AuthorizationClient.createLoginActivityIntent(context as MainActivity, request)
+                        spotifyAuthLauncher.launch(intent)
+                    }
+                )
+            } else {
+                username?.let {
+                    SettingsEntry(
+                        title = stringResource(R.string.spotify_logged_in_as, it),
+                        text = stringResource(R.string.spotify_logged_in_text),
+                        onClick = { }
+                    )
+                }
+                SettingsEntry(
+                    title = stringResource(R.string.spotify_import_title),
+                    text = stringResource(R.string.spotify_import_text),
+                    onClick = { showingPlaylistSelectionDialog = true }
+                )
+                SettingsEntry(
+                    title = stringResource(R.string.spotify_logout_title),
+                    text = stringResource(R.string.spotify_logout_text),
+                    onClick = {
+                        spotify.logout()
+                        isLoggedIn = false
+                        username = null
+                        Toast.makeText(context, context.getString(R.string.logged_out), Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
         }
         SettingsGroup(title = stringResource(R.string.piped)) {
             SettingsEntry(
@@ -442,7 +511,7 @@ fun SyncSettings(
             SettingsEntry(
                 title = stringResource(R.string.learn_more),
                 text = stringResource(R.string.learn_more_description),
-                onClick = { uriHandler.openUri("https://github.com/TeamPiped/Piped/blob/master/README.md") }
+                onClick = { uriHandler.openUri(context.getString(R.string.piped_learn_more_url)) }
             )
         }
         SettingsGroup(title = stringResource(R.string.piped_sessions)) {

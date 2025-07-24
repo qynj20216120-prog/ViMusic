@@ -138,7 +138,6 @@ import kotlinx.coroutines.withContext
 private const val TAG = "MainActivity"
 private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
-// Viewmodel in order to avoid recreating the entire Player state (WORKAROUND)
 class MainViewModel : ViewModel() {
     var binder: PlayerService.Binder? by mutableStateOf(null)
 
@@ -156,7 +155,6 @@ class MainActivity : ComponentActivity(), MonetColorsChangedListener {
 
         override fun onServiceDisconnected(name: ComponentName?) {
             vm.binder = null
-            // Try to rebind, otherwise fail
             unbindService(this)
             bindService(intent<PlayerService>(), this, BIND_AUTO_CREATE)
         }
@@ -212,7 +210,7 @@ class MainActivity : ComponentActivity(), MonetColorsChangedListener {
         SystemBarAppearance(palette = appearance.colorPalette)
 
         BoxWithConstraints(
-            modifier = Modifier.background(appearance.colorPalette.background0) then modifier.fillMaxSize()
+            modifier = Modifier.background(appearance.colorPalette.background0).then(modifier.fillMaxSize())
         ) {
             CompositionLocalProvider(
                 LocalAppearance provides appearance,

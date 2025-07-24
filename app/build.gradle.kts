@@ -26,6 +26,11 @@ android {
         versionName = project.version.toString()
 
         multiDexEnabled = true
+
+        manifestPlaceholders += mapOf(
+            "redirectSchemeName" to "vimusic",
+            "redirectHostName" to "spotify-callback"
+        )
     }
 
     splits {
@@ -169,6 +174,12 @@ dependencies {
     implementation(libs.log4j)
     implementation(libs.slf4j)
     implementation(libs.logback)
+
+    implementation(libs.auth)
+    implementation(libs.security.crypto)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.security.crypto)
 
     implementation(projects.providers.common)
     implementation(projects.providers.github)
