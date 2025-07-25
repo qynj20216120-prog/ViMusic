@@ -150,12 +150,13 @@ object Innertube {
 
     @Suppress("all")
     private val regexes = listOf(
-        "\\bm=([a-zA-Z0-9$]{2,})\\(decodeURIComponent\\(h\\.s\\)\\)".toRegex(),
-        "\\bc&&\\(c=([a-zA-Z0-9$]{2,})\\(decodeURIComponent\\(c\\)\\)".toRegex(),
-        "(?:\\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,})\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\\s*\"\"\\s*\\)".toRegex(),
-        "([\\w$]+)\\s*=\\s*function\\((\\w+)\\)\\{\\s*\\2=\\s*\\2\\.split\\(\"\"\\)\\s*;".toRegex(),
-        "([a-zA-Z0-9\$]+)\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\"\"\\);".toRegex(),
-        "\\b([a-zA-Z0-9\$]{2,})\\s*=\\s*function\\(\\s*a\\s*\\)\\s*\\{\\s*a\\s*=\\s*a\\.split\\(\"\"\\)".toRegex()
+        // New, more reliable patterns translated from yt-dlp
+        """\b[cs]\s*&&\s*[adf]\.set\([^,]+\s*,\s*encodeURIComponent\s*\(\s*([a-zA-Z0-9$]+)\(""".toRegex(),
+        """(?:\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,})\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\s*\)""".toRegex(),
+        """([a-zA-Z0-9$]+)\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\);""".toRegex(),
+        // Original patterns (kept as fallbacks)
+        """\bm=([a-zA-Z0-9$]{2,})\(decodeURIComponent\(h\.s\)\)""".toRegex(),
+        """\bc&&\(c=([a-zA-Z0-9$]{2,})\(decodeURIComponent\(c\)\)""".toRegex()
     )
 
     private suspend fun getJavaScriptChallenge(context: Context): JavaScriptChallenge? {
