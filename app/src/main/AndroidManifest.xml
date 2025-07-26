@@ -60,28 +60,22 @@
         <activity
             android:name="it.vfsfitvnm.vimusic.MainActivity"
             android:exported="true"
-            android:launchMode="singleTop" android:theme="@style/Theme.ViMusic.NoActionBar"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.ViMusic.NoActionBar"
             android:windowSoftInputMode="adjustResize"
             android:supportsPictureInPicture="true"
             android:configChanges="colorMode|density|fontScale|keyboard|keyboardHidden|layoutDirection|locale|mcc|mnc|navigation|orientation|screenLayout|screenSize|smallestScreenSize|touchscreen|uiMode">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <action android:name="android.intent.action.MUSIC_PLAYER" /> <category android:name="android.intent.category.DEFAULT" />
+                <action android:name="android.intent.action.MUSIC_PLAYER" /> <!-- Not a real action, but apparently some apps query for this -->
+
+                <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.APP_MUSIC" />
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="http" />
-                <data android:scheme="https" />
-                <data android:host="spotify-callback"
-                    tools:ignore="AppLinkUrlError" />
-            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
                 <category android:name="android.intent.category.DEFAULT" />

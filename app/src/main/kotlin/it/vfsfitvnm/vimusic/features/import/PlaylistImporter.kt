@@ -1,4 +1,4 @@
-package it.vfsfitvnm.vimusic.features.spotify
+package it.vfsfitvnm.vimusic.features.import
 
 import android.util.Log
 import it.vfsfitvnm.vimusic.Database
@@ -15,43 +15,14 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
-@Serializable
-data class SpotifyPlaylistResponse(
-    val name: String,
-    val description: String? = null,
-    val tracks: TracksObject
+// A simple, universal data class for any song from any source
+data class SongImportInfo(
+    val title: String,
+    val artist: String,
 )
 
-@Serializable
-data class TracksObject(
-    val items: List<TrackItem>
-)
-
-@Serializable
-data class TrackItem(
-    val track: TrackDetails?
-)
-
-@Serializable
-data class TrackDetails(
-    val name: String,
-    val artists: List<Artist>,
-    val album: Album
-)
-
-@Serializable
-data class Artist(
-    val name: String
-)
-
-@Serializable
-data class Album(
-    val name: String
-)
-
+// The generic status class remains the same
 sealed class ImportStatus {
     data object Idle : ImportStatus()
     data class InProgress(val processed: Int, val total: Int) : ImportStatus()
@@ -59,24 +30,16 @@ sealed class ImportStatus {
     data class Error(val message: String) : ImportStatus()
 }
 
-class SpotifyPlaylistProcessor {
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        coerceInputValues = true
-    }
-
-    suspend fun processAndImportPlaylist(
-        rawJson: String,
+class PlaylistImporter {
+    suspend fun import(
+        songList: List<SongImportInfo>,
         playlistName: String,
         unknownErrorMessage: String,
         onProgressUpdate: (ImportStatus) -> Unit
     ) {
         try {
-            val playlistResponse = json.decodeFromString<SpotifyPlaylistResponse>(rawJson)
-            val tracks = playlistResponse.tracks.items.mapNotNull { it.track }
-            val totalTracks = tracks.size
-            Log.d("SpotifyProcessor", "Parsing complete. Starting batched search for $totalTracks tracks.")
+            val totalTracks = songList.size
+            Log.d("PlaylistImporter", "Starting import for $totalTracks tracks.")
 
             val songsToAdd = mutableListOf<Song>()
             var processedCount = 0
@@ -84,17 +47,14 @@ class SpotifyPlaylistProcessor {
             onProgressUpdate(ImportStatus.InProgress(processed = 0, total = totalTracks))
 
             val batchSize = 15
-            tracks.chunked(batchSize).forEachIndexed { index, batch ->
-                Log.d("SpotifyProcessor", "Processing batch ${index + 1}...")
+            songList.chunked(batchSize).forEachIndexed { index, batch ->
+                Log.d("PlaylistImporter", "Processing batch ${index + 1}...")
                 coroutineScope {
                     val deferredSongsInBatch = batch.map { track ->
                         async(Dispatchers.IO) {
-                            val artistNames = track.artists.joinToString { it.name }
-                            val searchQuery = "${track.name} $artistNames"
-                            val localSong = Database.instance.search("%${track.name}%").firstOrNull()?.firstOrNull { song ->
-                                song.artistsText?.let { artistsText ->
-                                    track.artists.any { artist -> artistsText.contains(artist.name, ignoreCase = true) }
-                                } == true
+                            val searchQuery = "${track.title} ${track.artist}"
+                            val localSong = Database.instance.search("%${track.title}%").firstOrNull()?.firstOrNull { song ->
+                                song.artistsText?.contains(track.artist, ignoreCase = true) == true
                             }
 
                             if (localSong != null) {
@@ -123,7 +83,7 @@ class SpotifyPlaylistProcessor {
                                     thumbnailUrl = bestMatch.thumbnail?.url
                                 ).takeIf { it.id.isNotEmpty() }
                             } else {
-                                Log.w("SpotifyProcessor", "No suitable match found for \"$searchQuery\"")
+                                Log.w("PlaylistImporter", "No suitable match found for \"$searchQuery\"")
                                 null
                             }
                         }
@@ -132,29 +92,26 @@ class SpotifyPlaylistProcessor {
                 }
 
                 processedCount += batch.size
-                Log.d("SpotifyProcessor", "Batch ${index + 1} complete. Total songs found: ${songsToAdd.size}")
+                Log.d("PlaylistImporter", "Batch ${index + 1} complete. Total songs found: ${songsToAdd.size}")
                 onProgressUpdate(ImportStatus.InProgress(processed = processedCount, total = totalTracks))
             }
 
-            Log.d("SpotifyProcessor", "All batches complete. Found ${songsToAdd.size} total songs to import.")
+            Log.d("PlaylistImporter", "All batches complete. Found ${songsToAdd.size} total songs to import.")
 
             transaction {
                 val newPlaylist = Playlist(name = playlistName)
                 val newPlaylistId = Database.instance.insert(newPlaylist)
                 if (newPlaylistId != -1L) {
-                    Log.d("SpotifyProcessor", "Successfully created playlist '$playlistName' with ID: $newPlaylistId")
                     songsToAdd.forEachIndexed { index, song ->
                         Database.instance.insert(song)
-                        val songPlaylistMap = SongPlaylistMap(
-                            songId = song.id,
-                            playlistId = newPlaylistId,
-                            position = index
+                        Database.instance.insert(
+                            SongPlaylistMap(
+                                songId = song.id,
+                                playlistId = newPlaylistId,
+                                position = index
+                            )
                         )
-                        Database.instance.insert(songPlaylistMap)
                     }
-                    Log.d("SpotifyProcessor", "Finished importing ${songsToAdd.size} songs to '$playlistName'.")
-                } else {
-                    Log.e("SpotifyProcessor", "Failed to create playlist '$playlistName'. It might already exist.")
                 }
             }
 
@@ -162,14 +119,14 @@ class SpotifyPlaylistProcessor {
             onProgressUpdate(ImportStatus.Complete(imported = songsToAdd.size, failed = failedCount, total = totalTracks))
 
         } catch (e: Exception) {
-            Log.e("SpotifyProcessor", "An error occurred during the import process.", e)
+            Log.e("PlaylistImporter", "An error occurred during the import process.", e)
             onProgressUpdate(ImportStatus.Error(e.message ?: unknownErrorMessage))
         }
     }
 
-    private fun findBestMatchInResults(spotifyTrack: TrackDetails, candidates: List<Innertube.SongItem>): Innertube.SongItem? {
+    private fun findBestMatchInResults(importTrack: SongImportInfo, candidates: List<Innertube.SongItem>): Innertube.SongItem? {
         val scoredCandidates = candidates.map { candidate ->
-            candidate to calculateMatchScore(spotifyTrack, candidate)
+            candidate to calculateMatchScore(importTrack, candidate)
         }
 
         return scoredCandidates
@@ -178,36 +135,29 @@ class SpotifyPlaylistProcessor {
             ?.first
     }
 
-    private fun calculateMatchScore(spotifyTrack: TrackDetails, candidate: Innertube.SongItem): Int {
+    private fun calculateMatchScore(importTrack: SongImportInfo, candidate: Innertube.SongItem): Int {
         val candidateTitle = candidate.info?.name?.lowercase() ?: return 0
         val candidateArtists = candidate.authors?.joinToString { it.name.toString() }?.lowercase() ?: ""
+        val primaryImportArtist = importTrack.artist.split(",")[0].trim().lowercase()
 
-        val primarySpotifyArtist = spotifyTrack.artists.firstOrNull()?.name?.trim()?.lowercase() ?: return 0
-        if (!candidateArtists.contains(primarySpotifyArtist)) {
+        if (!candidateArtists.contains(primaryImportArtist)) {
             return 0
         }
 
-        val badKeywords = listOf(
-            "cover", "remix", "live", "instrumental", "karaoke", "reaction",
-            "lyrics", "unplugged", "acoustic", "reverb", "slowed"
-        )
+        val badKeywords = listOf("cover", "remix", "live", "instrumental", "karaoke", "reaction", "lyrics", "unplugged", "acoustic", "reverb", "slowed")
         if (badKeywords.any { candidateTitle.contains(it) }) {
             return 0
         }
 
-        val cleanedSpotifyTitle = spotifyTrack.name.substringBefore(" (").substringBefore(" -").trim().lowercase()
-        if (!candidateTitle.contains(cleanedSpotifyTitle)) {
+        val cleanedImportTitle = importTrack.title.substringBefore(" (").substringBefore(" -").trim().lowercase()
+        if (!candidateTitle.contains(cleanedImportTitle)) {
             return 0
         }
 
         var score = 100
-        val lengthDifference = candidateTitle.length - cleanedSpotifyTitle.length
+        val lengthDifference = candidateTitle.length - cleanedImportTitle.length
         score -= lengthDifference
-
-        if (candidateTitle == cleanedSpotifyTitle) {
-            score += 10
-        }
-
+        if (candidateTitle == cleanedImportTitle) score += 10
         return score
     }
 }

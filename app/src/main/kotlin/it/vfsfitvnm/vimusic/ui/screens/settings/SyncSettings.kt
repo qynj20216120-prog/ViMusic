@@ -1,13 +1,10 @@
 package it.vfsfitvnm.vimusic.ui.screens.settings
 
-import android.widget.Toast
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -26,20 +23,17 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.credentials.CredentialManager
-import com.spotify.sdk.android.auth.AuthorizationClient
-import com.spotify.sdk.android.auth.AuthorizationResponse
 import it.vfsfitvnm.compose.persist.persistList
 import it.vfsfitvnm.core.ui.LocalAppearance
 import it.vfsfitvnm.providers.piped.Piped
 import it.vfsfitvnm.providers.piped.models.Instance
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalCredentialManager
-import it.vfsfitvnm.vimusic.MainActivity
 import it.vfsfitvnm.vimusic.R
-import it.vfsfitvnm.vimusic.features.spotify.ImportStatus
-import it.vfsfitvnm.vimusic.features.spotify.Spotify
-import it.vfsfitvnm.vimusic.features.spotify.SpotifyPlaylist
-import it.vfsfitvnm.vimusic.features.spotify.SpotifyPlaylistProcessor
+import it.vfsfitvnm.vimusic.features.import.CsvPlaylistParser
+import it.vfsfitvnm.vimusic.features.import.ImportStatus
+import it.vfsfitvnm.vimusic.features.import.PlaylistImporter
+import it.vfsfitvnm.vimusic.features.import.SongImportInfo
 import it.vfsfitvnm.vimusic.models.PipedSession
 import it.vfsfitvnm.vimusic.transaction
 import it.vfsfitvnm.vimusic.ui.components.themed.*
@@ -47,10 +41,9 @@ import it.vfsfitvnm.vimusic.ui.screens.Route
 import it.vfsfitvnm.vimusic.utils.*
 import io.ktor.http.Url
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Route
 @Composable
 fun SyncSettings(
@@ -62,143 +55,125 @@ fun SyncSettings(
     val context = LocalContext.current
     val pipedSessions by Database.instance.pipedSessions().collectAsState(initial = listOf())
 
-    val spotify = remember { Spotify(context.applicationContext) }
-    var isLoggedIn by remember { mutableStateOf(spotify.isLoggedIn()) }
-    var username by remember { mutableStateOf(spotify.getUsername()) }
+    // CSV Import State
+    var showingColumnMappingDialog by remember { mutableStateOf<Pair<Uri, List<String>>?>(null) }
+    var showingNameDialog by remember { mutableStateOf<List<SongImportInfo>?>(null) }
+    var showingImportDialog by remember { mutableStateOf(false) }
+    var importStatus by remember { mutableStateOf<ImportStatus>(ImportStatus.Idle) }
 
-    val spotifyAuthLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val response = AuthorizationClient.getResponse(result.resultCode, result.data)
-        when (response.type) {
-            AuthorizationResponse.Type.TOKEN -> {
-                Toast.makeText(context, context.getString(R.string.login_successful), Toast.LENGTH_SHORT).show()
-                spotify.setToken(response.accessToken)
+    // Piped State
+    var linkingPiped by remember { mutableStateOf(false) }
+    var deletingPipedSession: Int? by rememberSaveable { mutableStateOf(null) }
 
-                coroutineScope.launch {
-                    spotify.fetchAndSaveUserProfile()
-                        .onSuccess {
-                            isLoggedIn = true
-                            username = spotify.getUsername()
-                        }
-                        .onFailure {
-                            Toast.makeText(context, context.getString(R.string.login_failed_profile), Toast.LENGTH_LONG).show()
-                            isLoggedIn = true
-                            username = null
-                        }
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch {
+                try {
+                    context.contentResolver.openInputStream(uri)?.let { inputStream ->
+                        val parser = CsvPlaylistParser()
+                        val header = parser.getHeader(inputStream)
+                        showingColumnMappingDialog = Pair(uri, header)
+                    }
+                } catch (e: Exception) {
+                    // Handle file reading errors if needed
                 }
-            }
-            AuthorizationResponse.Type.ERROR -> {
-                Toast.makeText(context, context.getString(R.string.login_failed, response.error), Toast.LENGTH_LONG).show()
-            }
-            else -> {
-                // User cancelled
             }
         }
     }
 
-    var linkingPiped by remember { mutableStateOf(false) }
-    var showingPlaylistSelectionDialog by remember { mutableStateOf(false) }
-    var showingNameDialogForJson by remember { mutableStateOf<String?>(null) }
-    var importInfo by remember { mutableStateOf<Pair<String, String>?>(null) }
-    var deletingPipedSession: Int? by rememberSaveable { mutableStateOf(null) }
+    // CSV Dialog 1: Column Mapping
+    showingColumnMappingDialog?.let { (uri, header) ->
+        var titleColumnIndex by remember { mutableStateOf(0) }
+        var artistColumnIndex by remember { mutableStateOf(1) }
+        var isTitleExpanded by remember { mutableStateOf(false) }
+        var isArtistExpanded by remember { mutableStateOf(false) }
 
-    if (showingPlaylistSelectionDialog) {
-        var userPlaylists by remember { mutableStateOf<List<SpotifyPlaylist>>(emptyList()) }
-        var isLoadingPlaylists by remember { mutableStateOf(true) }
-        var error by remember { mutableStateOf<String?>(null) }
-        val loadPlaylistsFailedString = stringResource(R.string.load_playlists_failed)
+        DefaultDialog(onDismiss = { showingColumnMappingDialog = null }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(all = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(text = stringResource(R.string.map_csv_columns), style = typography.m.semiBold)
 
-        LaunchedEffect(Unit) {
-            spotify.getUserPlaylists()
-                .onSuccess { playlists -> userPlaylists = playlists }
-                .onFailure { throwable -> error = throwable.message ?: loadPlaylistsFailedString }
-            isLoadingPlaylists = false
-        }
-
-        DefaultDialog(onDismiss = { showingPlaylistSelectionDialog = false }) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
-                Text(
-                    text = stringResource(R.string.select_a_playlist),
-                    style = typography.m.semiBold,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-                )
-                when {
-                    isLoadingPlaylists -> Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                    ) { CircularProgressIndicator() }
-
-                    error != null -> Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(100.dp)
-                            .padding(horizontal = 24.dp)
-                    ) { Text(error!!, color = MaterialTheme.colorScheme.error) }
-
-                    else -> {
-                        LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                            items(userPlaylists) { playlist ->
-                                Text(
-                                    text = playlist.name,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            coroutineScope.launch {
-                                                val rawJson = spotify.getPlaylist(playlist.id)
-                                                if (rawJson != null) {
-                                                    showingPlaylistSelectionDialog = false
-                                                    showingNameDialogForJson = rawJson
-                                                } else {
-                                                    withContext(Dispatchers.Main) {
-                                                        Toast
-                                                            .makeText(context, context.getString(R.string.fetch_playlist_details_failed), Toast.LENGTH_SHORT)
-                                                            .show()
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        .padding(horizontal = 24.dp, vertical = 12.dp)
-                                )
-                            }
+                ExposedDropdownMenuBox(
+                    expanded = isTitleExpanded,
+                    onExpandedChange = { isTitleExpanded = it }
+                ) {
+                    TextField(
+                        readOnly = true,
+                        value = header.getOrElse(titleColumnIndex) { "" },
+                        onValueChange = {},
+                        label = { Text(stringResource(R.string.song_title_column)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTitleExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isTitleExpanded,
+                        onDismissRequest = { isTitleExpanded = false }
+                    ) {
+                        header.forEachIndexed { index, column ->
+                            DropdownMenuItem(
+                                text = { Text(column) },
+                                onClick = {
+                                    titleColumnIndex = index
+                                    isTitleExpanded = false
+                                }
+                            )
                         }
                     }
                 }
-            }
-        }
-    }
 
-    showingNameDialogForJson?.let { rawJson ->
-        DefaultDialog(onDismiss = { showingNameDialogForJson = null }) {
-            var playlistName by rememberSaveable { mutableStateOf("") }
-            Column(modifier = Modifier
-                .fillMaxWidth()
-                .padding(all = 24.dp)) {
-                BasicText(
-                    text = stringResource(R.string.name_your_playlist_title),
-                    style = typography.m.semiBold,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                TextField(
-                    value = playlistName, onValueChange = { playlistName = it },
-                    hintText = stringResource(R.string.playlist_name_hint)
-                )
-                Spacer(modifier = Modifier.height(24.dp))
+                ExposedDropdownMenuBox(
+                    expanded = isArtistExpanded,
+                    onExpandedChange = { isArtistExpanded = it }
+                ) {
+                    TextField(
+                        readOnly = true,
+                        value = header.getOrElse(artistColumnIndex) { "" },
+                        onValueChange = {},
+                        label = { Text(stringResource(R.string.artist_name_column)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isArtistExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isArtistExpanded,
+                        onDismissRequest = { isArtistExpanded = false }
+                    ) {
+                        header.forEachIndexed { index, column ->
+                            DropdownMenuItem(
+                                text = { Text(column) },
+                                onClick = {
+                                    artistColumnIndex = index
+                                    isArtistExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Box(modifier = Modifier.fillMaxWidth()) {
                     DialogTextButton(
-                        text = stringResource(R.string.dialog_cancel),
-                        onClick = { showingNameDialogForJson = null },
+                        text = stringResource(R.string.cancel),
+                        onClick = { showingColumnMappingDialog = null },
                         modifier = Modifier.align(Alignment.CenterStart)
                     )
                     DialogTextButton(
-                        text = stringResource(R.string.create_playlist_button),
-                        enabled = playlistName.isNotBlank(),
+                        text = stringResource(R.string.next),
                         onClick = {
-                            importInfo = rawJson to playlistName
-                            showingNameDialogForJson = null
+                            coroutineScope.launch {
+                                context.contentResolver.openInputStream(uri)?.let { inputStream ->
+                                    val parser = CsvPlaylistParser()
+                                    val songList = parser.parse(inputStream, titleColumnIndex, artistColumnIndex)
+                                    showingNameDialog = songList
+                                    showingColumnMappingDialog = null
+                                }
+                            }
                         },
                         modifier = Modifier.align(Alignment.CenterEnd)
                     )
@@ -207,28 +182,62 @@ fun SyncSettings(
         }
     }
 
-    importInfo?.let { (rawJson, playlistName) ->
-        var importStatus by remember { mutableStateOf<ImportStatus>(ImportStatus.Idle) }
-        val scope = rememberCoroutineScope()
-        val unknownErrorString = stringResource(R.string.unknown_error)
+    // CSV Dialog 2: Name Playlist
+    if (showingNameDialog != null) {
+        DefaultDialog(onDismiss = { showingNameDialog = null }) {
+            var playlistName by remember { mutableStateOf("") }
+            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
+                Text(
+                    text = stringResource(R.string.name_your_playlist_title),
+                    style = typography.m.semiBold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                TextField(
+                    value = playlistName,
+                    onValueChange = { playlistName = it },
+                    hintText = stringResource(R.string.playlist_name_hint)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    DialogTextButton(
+                        text = stringResource(R.string.cancel),
+                        onClick = { showingNameDialog = null },
+                        modifier = Modifier.align(Alignment.CenterStart)
+                    )
+                    DialogTextButton(
+                        text = stringResource(R.string.create_playlist_button),
+                        enabled = playlistName.isNotBlank(),
+                        onClick = {
+                            showingImportDialog = true
+                            val songList = showingNameDialog ?: emptyList()
+                            val unknownErrorString = context.getString(R.string.unknown_error)
+                            showingNameDialog = null
 
-        LaunchedEffect(Unit) {
-            scope.launch {
-                val processor = SpotifyPlaylistProcessor()
-                processor.processAndImportPlaylist(rawJson, playlistName, unknownErrorString) { statusUpdate ->
-                    importStatus = statusUpdate
+                            coroutineScope.launch {
+                                val importer = PlaylistImporter()
+                                importer.import(
+                                    songList = songList,
+                                    playlistName = playlistName,
+                                    unknownErrorMessage = unknownErrorString,
+                                    onProgressUpdate = { status -> importStatus = status }
+                                )
+                            }
+                        },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    )
                 }
             }
         }
+    }
 
+    // CSV Dialog 3: Import Progress
+    if (showingImportDialog) {
         DefaultDialog(onDismiss = {
             if (importStatus !is ImportStatus.InProgress) {
-                importInfo = null
+                showingImportDialog = false
             }
         }) {
-            Column(modifier = Modifier
-                .fillMaxWidth()
-                .padding(all = 24.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
                 val title = when (importStatus) {
                     is ImportStatus.InProgress -> stringResource(R.string.import_title_in_progress)
                     is ImportStatus.Complete -> stringResource(R.string.import_title_complete)
@@ -245,7 +254,10 @@ fun SyncSettings(
                         )
                         LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = stringResource(R.string.import_progress, status.processed, status.total), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = stringResource(R.string.import_progress, status.processed, status.total),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                     is ImportStatus.Complete -> {
                         Text(stringResource(R.string.import_complete_summary, status.imported, status.total))
@@ -261,16 +273,22 @@ fun SyncSettings(
                         Text(stringResource(R.string.import_initializing))
                     }
                 }
+
                 if (importStatus !is ImportStatus.InProgress) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        DialogTextButton(text = stringResource(R.string.dialog_ok), onClick = { importInfo = null }, modifier = Modifier.align(Alignment.CenterEnd))
+                        DialogTextButton(
+                            text = stringResource(R.string.dialog_ok),
+                            onClick = { showingImportDialog = false },
+                            modifier = Modifier.align(Alignment.CenterEnd)
+                        )
                     }
                 }
             }
         }
     }
 
+    // Piped Dialog 1: Linking
     if (linkingPiped) DefaultDialog(
         onDismiss = { linkingPiped = false },
         horizontalAlignment = Alignment.CenterHorizontally
@@ -452,6 +470,7 @@ fun SyncSettings(
         }
     }
 
+    // Piped Dialog 2: Deleting
     if (deletingPipedSession != null) ConfirmationDialog(
         text = stringResource(R.string.confirm_delete_piped_session),
         onDismiss = {
@@ -466,41 +485,12 @@ fun SyncSettings(
 
     SettingsCategoryScreen(title = stringResource(R.string.sync)) {
         SettingsDescription(text = stringResource(R.string.sync_description))
-        SettingsGroup(title = stringResource(R.string.spotify)) {
-            if (!isLoggedIn) {
-                SettingsEntry(
-                    title = stringResource(R.string.spotify_login_title),
-                    text = stringResource(R.string.spotify_login_text),
-                    onClick = {
-                        val request = spotify.getAuthenticationRequest()
-                        val intent = AuthorizationClient.createLoginActivityIntent(context as MainActivity, request)
-                        spotifyAuthLauncher.launch(intent)
-                    }
-                )
-            } else {
-                username?.let {
-                    SettingsEntry(
-                        title = stringResource(R.string.spotify_logged_in_as, it),
-                        text = stringResource(R.string.spotify_logged_in_text),
-                        onClick = { }
-                    )
-                }
-                SettingsEntry(
-                    title = stringResource(R.string.spotify_import_title),
-                    text = stringResource(R.string.spotify_import_text),
-                    onClick = { showingPlaylistSelectionDialog = true }
-                )
-                SettingsEntry(
-                    title = stringResource(R.string.spotify_logout_title),
-                    text = stringResource(R.string.spotify_logout_text),
-                    onClick = {
-                        spotify.logout()
-                        isLoggedIn = false
-                        username = null
-                        Toast.makeText(context, context.getString(R.string.logged_out), Toast.LENGTH_SHORT).show()
-                    }
-                )
-            }
+        SettingsGroup(title = stringResource(R.string.local_import)) {
+            SettingsEntry(
+                title = stringResource(R.string.import_from_csv),
+                text = stringResource(R.string.import_from_csv_description),
+                onClick = { filePickerLauncher.launch("text/csv") }
+            )
         }
         SettingsGroup(title = stringResource(R.string.piped)) {
             SettingsEntry(
