@@ -129,7 +129,6 @@
     <string name="invalid_synchronized_lyrics">Ungültiger synchronisierter Liedtext, rufen Sie den Text erneut ab oder bearbeiten Sie ihn und versuchen Sie es erneut</string>
     <string name="show_unsynchronized_lyrics">Unsynchronisierten Liedtext anzeigen</string>
     <string name="show_synchronized_lyrics">Synchronisierte Liedtexte anzeigen</string>
-    <string name="provided_lyrics_by">Zur Verfügung gestellt von lrclib.net &amp; kugou.com</string>
     <string name="edit_lyrics">Liedtext bearbeiten</string>
     <string name="search_lyrics_online">Liedtexte online suchen</string>
     <string name="refetch_lyrics">Liedext erneut laden</string>
@@ -154,6 +153,7 @@
     <string name="view_playlist">Wiedergabeliste ansehen</string>
     <string name="search_placeholder">Suchen…</string>
     <string name="format_version_credits">v%1$s von Huizengek &amp; vfsfitvnm</string>
+    <string name="source_credits">Besonderer Dank geht an vfsfitvnm</string>
     <string name="social">Soziales</string>
     <string name="contact">Kontakt</string>
     <string name="github">GitHub</string>
@@ -206,6 +206,7 @@
     <string name="lyrics_show_system_bars_description">Das Ausschalten dieser Funktion ermöglicht die systemweite Vollbilddarstellung</string>
     <string name="pip">Bild-in-Bild</string>
     <string name="pip_description">Wechselt beim Umschalten auf den Hintergrund automatisch in den Bild-in-Bild-Modus</string>
+    <string name="auto_open_player_description">Player automatisch erweitern, wenn auf ein Lied getippt wird</string>
     <string name="cache">Cache</string>
     <string name="cache_description">Wenn der Platz im Cache voll ist, werden die Ressourcen, auf die am längsten nicht mehr zugegriffen wurde, gelöscht</string>
     <string name="image_cache">Bild-Cache</string>
@@ -269,6 +270,7 @@
     <string name="resume_playback_description">Wenn ein kabelgebundenes oder Bluetooth-Gerät angeschlossen ist</string>
     <string name="stop_when_closed">Anhalten wenn geschlossen</string>
     <string name="stop_when_closed_description">Wenn Sie die App schließen, wird die Musik nicht mehr abgespielt</string>
+    <string name="pause_minimum_volume_description">Pausieren Sie den Player, wenn Sie die Lautstärke Ihres Geräts auf Null stellen</string>
     <string name="audio">Audio</string>
     <string name="skip_silence">Stille überspringen</string>
     <string name="skip_silence_description">Stille Teile während der Wiedergabe überspringen</string>
@@ -373,4 +375,27 @@
         <item quantity="one">%1$d Lied</item>
         <item quantity="other">%1$d Lieder</item>
     </plurals>
+    <string name="auto_open_player">Spieler öffnen</string>
+    <string name="pause_minimum_volume">Pause bei minimaler Lautstärke</string>
+    <string name="local_import">Lokaler Import</string>
+    <string name="import_from_csv">Import aus CSV</string>
+    <string name="import_from_csv_description">Importieren Sie eine Wiedergabeliste aus einer beliebigen CSV-Datei, indem Sie Spalten zuordnen.</string>
+    <string name="dialog_ok">OK</string>
+    <string name="next">Nächste</string>
+    <string name="map_csv_columns">CSV-Spalten zuordnen</string>
+    <string name="song_title_column">Songtitelspalte</string>
+    <string name="artist_name_column">Spalte „Künstlername“.</string>
+    <string name="name_your_playlist_title">Benennen Sie Ihre neue Playlist</string>
+    <string name="playlist_name_hint">Name der Wiedergabeliste</string>
+    <string name="create_playlist_button">Playlist erstellen</string>
+    <string name="import_title_in_progress">Playlist wird importiert…</string>
+    <string name="import_title_complete">Import abgeschlossen</string>
+    <string name="import_title_failed">Import fehlgeschlagen</string>
+    <string name="import_title_starting">Beginnend mit …</string>
+    <string name="import_progress">%1$d von %2$d Liedern verarbeitet</string>
+    <string name="import_complete_summary">%1$d von %2$d Songs erfolgreich importiert.</string>
+    <string name="import_failed_summary">%1$d Lieder konnten nicht gefunden werden.</string>
+    <string name="import_error_message">Ein Fehler ist aufgetreten: %1$s</string>
+    <string name="import_initializing">Importvorgang wird initialisiert …</string>
+    <string name="unknown_error">Es ist ein unbekannter Fehler aufgetreten</string>
 </resources>
