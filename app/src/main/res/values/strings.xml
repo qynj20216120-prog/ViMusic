@@ -310,7 +310,7 @@
     <string name="username">Username</string>
     <string name="password">Password</string>
     <string name="login">Login</string>
-    <string name="sync_description">You can host playlists elsewhere and synchronize them with ViMusic. Currently only supports Piped &amp; Spotify.</string>
+    <string name="sync_description">You can host playlists elsewhere and synchronize them with ViMusic. Currently only supports Piped &amp; CSV.</string>
     <string name="add_account">Add account</string>
     <string name="add_account_description">Link a Piped account with your instance, username and password.</string>
     <string name="learn_more">Learn more</string>
