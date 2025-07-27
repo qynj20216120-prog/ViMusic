@@ -29,12 +29,10 @@ import io.ktor.http.contentType
 import io.ktor.http.parameters
 import io.ktor.http.parseQueryString
 import io.ktor.serialization.kotlinx.json.json
-import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import kotlin.random.Random
 
 internal val json = Json {
     ignoreUnknownKeys = true
@@ -46,20 +44,7 @@ object Innertube {
     private var javascriptChallenge: JavaScriptChallenge? = null
     private var lastChallengeUpdate = 0L
     private const val CHALLENGE_CACHE_DURATION = 30 * 60 * 1000L // 30 minutes
-
-    // Rotate API keys to reduce rate limiting
-    private val API_KEYS = listOf(
-        "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30",
-        "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8",
-        "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc"
-    )
-
-    private var currentApiKeyIndex = 0
-    private fun getApiKey(): String {
-        currentApiKeyIndex = (currentApiKeyIndex + 1) % API_KEYS.size
-        return API_KEYS[currentApiKeyIndex]
-    }
-
+    private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
     private val OriginInterceptor = createClientPlugin("OriginInterceptor") {
         client.sendPipeline.intercept(HttpSendPipeline.State) {
             context.headers {
@@ -69,19 +54,9 @@ object Innertube {
                     else -> context.host
                 }
                 val origin = "${context.url.protocol.name}://$host"
-
-                set("host", host)
-                set("x-origin", origin)
                 set("origin", origin)
                 set("referer", "$origin/")
 
-                // Add additional headers to appear more like a real browser
-                set("sec-fetch-dest", "empty")
-                set("sec-fetch-mode", "cors")
-                set("sec-fetch-site", "same-origin")
-                set("sec-ch-ua", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"120\", \"Google Chrome\";v=\"120\"")
-                set("sec-ch-ua-mobile", "?0")
-                set("sec-ch-ua-platform", "\"Windows\"")
             }
         }
     }
@@ -134,15 +109,16 @@ object Innertube {
             url(scheme = "https", host = "music.youtube.com") {
                 contentType(ContentType.Application.Json)
                 headers {
-                    set("X-Goog-Api-Key", getApiKey())
-                    set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36")
+                    // Use consistent working API key
+                    set("X-Goog-Api-Key", API_KEY)
+                    set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                     set("Accept", "application/json")
                     set("Accept-Language", "en-US,en;q=0.9")
                     set("Accept-Encoding", "gzip, deflate, br")
                 }
                 parameters {
                     set("prettyPrint", "false")
-                    set("key", getApiKey())
+                    set("key", API_KEY)
                 }
             }
         }
@@ -172,15 +148,16 @@ object Innertube {
             context.client.getConfiguration()
             val jsUrl = context.client.jsUrl ?: return null
 
-            // Add some delay and jitter to avoid being detected
-            delay(Random.nextLong(100, 500))
+            // Remove artificial delay - it's suspicious
+            // delay(Random.nextLong(100, 500)) // REMOVED
 
             val sourceFile = baseClient
                 .get("${context.client.root}$jsUrl") {
                     context.apply()
+                    // Simplified headers - less suspicious
                     header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    header("Accept", "text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01")
                     header("Referer", "${context.client.root}/")
+                    // Remove Accept header manipulation
                 }
                 .bodyAsText()
 
