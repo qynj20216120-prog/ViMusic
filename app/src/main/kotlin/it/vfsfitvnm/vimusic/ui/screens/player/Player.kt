@@ -90,6 +90,7 @@ import it.vfsfitvnm.vimusic.utils.seamlessPlay
 import it.vfsfitvnm.vimusic.utils.secondary
 import it.vfsfitvnm.vimusic.utils.semiBold
 import it.vfsfitvnm.vimusic.utils.shouldBePlaying
+import it.vfsfitvnm.vimusic.utils.shuffleQueue
 import it.vfsfitvnm.vimusic.utils.thumbnail
 import it.vfsfitvnm.compose.persist.PersistMapCleanup
 import it.vfsfitvnm.compose.routing.OnGlobalRoute
@@ -183,11 +184,11 @@ fun Player(
 
     OnGlobalRoute { if (layoutState.expanded) layoutState.collapseSoft() }
 
-    if (mediaItem != null) BottomSheet(
+    if (mediaItem != null && binder != null) BottomSheet(
         state = layoutState,
         modifier = modifier.fillMaxSize(),
         onDismiss = {
-            binder?.let { onDismiss(it) }
+            binder.let { onDismiss(it) }
             layoutState.dismissSoft()
         },
         backHandlerEnabled = !menuState.isDisplayed,
@@ -200,7 +201,7 @@ fun Player(
                         if (horizontalSwipeToClose) modifier.onSwipe(
                             animateOffset = true,
                             onSwipeOut = { animationJob ->
-                                binder?.let { onDismiss(it) }
+                                binder.let { onDismiss(it) }
                                 animationJob.join()
                                 layoutState.dismissSoft()
                             }
@@ -300,7 +301,7 @@ fun Player(
                         IconButton(
                             icon = R.drawable.play_skip_back,
                             color = colorPalette.text,
-                            onClick = { binder?.player?.forceSeekToPrevious() },
+                            onClick = { binder.player.forceSeekToPrevious() },
                             modifier = Modifier
                                 .padding(horizontal = 4.dp, vertical = 8.dp)
                                 .size(20.dp)
@@ -311,10 +312,10 @@ fun Player(
                         modifier = Modifier
                             .clickable(
                                 onClick = {
-                                    if (shouldBePlaying) binder?.player?.pause()
+                                    if (shouldBePlaying) binder.player.pause()
                                     else {
-                                        if (binder?.player?.playbackState == Player.STATE_IDLE) binder.player.prepare()
-                                        binder?.player?.play()
+                                        if (binder.player.playbackState == Player.STATE_IDLE) binder.player.prepare()
+                                        binder.player.play()
                                     }
                                 },
                                 indication = ripple(bounded = false),
@@ -334,7 +335,7 @@ fun Player(
                     IconButton(
                         icon = R.drawable.play_skip_forward,
                         color = colorPalette.text,
-                        onClick = { binder?.player?.forceSeekToNext() },
+                        onClick = { binder.player.forceSeekToNext() },
                         modifier = Modifier
                             .padding(horizontal = 4.dp, vertical = 8.dp)
                             .size(20.dp)
@@ -408,7 +409,7 @@ fun Player(
 
         val controlsContent: @Composable (modifier: Modifier) -> Unit = { innerModifier ->
             Controls(
-                media = mediaItem?.toUiMedia(duration),
+                media = mediaItem!!.toUiMedia(duration),
                 binder = binder,
                 likedAt = likedAt,
                 setLikedAt = { likedAt = it },
@@ -455,6 +456,27 @@ fun Player(
                     .weight(1f)
             )
         }
+
+        Queue(
+            layoutState = playerBottomSheetState,
+            binder = binder,
+            beforeContent = {
+                IconButton(
+                    icon = R.drawable.repeat,
+                    color = colorPalette.text,
+                    onClick = { queueLoopEnabled = !queueLoopEnabled },
+                    modifier = Modifier.size(18.dp)
+                )
+            },
+            afterContent = {
+                IconButton(
+                    icon = R.drawable.shuffle,
+                    color = colorPalette.text,
+                    onClick = binder.player::shuffleQueue,
+                    modifier = Modifier.size(18.dp)
+                )
+            },
+        )
 
         var audioDialogOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -504,7 +526,7 @@ fun Player(
 
         if (boostDialogOpen) {
             fun submit(state: Float) = transaction {
-                mediaItem?.mediaId?.let { mediaId ->
+                mediaItem!!.mediaId.let { mediaId ->
                     Database.instance.setLoudnessBoost(
                         songId = mediaId,
                         loudnessBoost = state.takeUnless { it == 0f }
@@ -521,7 +543,7 @@ fun Player(
                         val state = remember { mutableFloatStateOf(0f) }
 
                         LaunchedEffect(mediaItem) {
-                            mediaItem?.mediaId?.let { mediaId ->
+                            mediaItem!!.mediaId.let { mediaId ->
                                 Database.instance
                                     .loudnessBoost(mediaId)
                                     .distinctUntilChanged()
