@@ -11,24 +11,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +25,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.media3.common.Player
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.favoritesIcon
+import it.vfsfitvnm.core.ui.utils.px
+import it.vfsfitvnm.core.ui.utils.roundedShape
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.models.Info
@@ -46,6 +36,7 @@ import it.vfsfitvnm.vimusic.models.ui.UiMedia
 import it.vfsfitvnm.vimusic.preferences.PlayerPreferences
 import it.vfsfitvnm.vimusic.service.PlayerService
 import it.vfsfitvnm.vimusic.ui.components.FadingRow
+import it.vfsfitvnm.vimusic.ui.components.LocalMenuState
 import it.vfsfitvnm.vimusic.ui.components.SeekBar
 import it.vfsfitvnm.vimusic.ui.components.themed.IconButton
 import it.vfsfitvnm.vimusic.ui.screens.artistRoute
@@ -54,14 +45,8 @@ import it.vfsfitvnm.vimusic.utils.forceSeekToNext
 import it.vfsfitvnm.vimusic.utils.forceSeekToPrevious
 import it.vfsfitvnm.vimusic.utils.secondary
 import it.vfsfitvnm.vimusic.utils.semiBold
-import it.vfsfitvnm.core.ui.LocalAppearance
-import it.vfsfitvnm.core.ui.favoritesIcon
-import it.vfsfitvnm.core.ui.utils.px
-import it.vfsfitvnm.core.ui.utils.roundedShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-private val DefaultOffset = 24.dp
 
 @Composable
 fun Controls(
@@ -72,7 +57,7 @@ fun Controls(
     shouldBePlaying: Boolean,
     position: Long,
     modifier: Modifier = Modifier,
-    layout: PlayerPreferences.PlayerLayout = PlayerPreferences.playerLayout
+    onShowSleepTimer: () -> Unit, // New parameter
 ) {
     val shouldBePlayingTransition = updateTransition(
         targetState = shouldBePlaying,
@@ -94,6 +79,7 @@ fun Controls(
             likedAt = likedAt,
             setLikedAt = setLikedAt,
             playButtonRadius = playButtonRadius,
+            onShowSleepTimer = onShowSleepTimer, // Pass it down
             modifier = modifier
         )
     }
@@ -108,8 +94,9 @@ private fun ClassicControls(
     likedAt: Long?,
     setLikedAt: (Long?) -> Unit,
     playButtonRadius: Dp,
+    onShowSleepTimer: () -> Unit, // New parameter
     modifier: Modifier = Modifier
-) = with(PlayerPreferences) {
+) {
     val (colorPalette) = LocalAppearance.current
 
     Column(
@@ -119,7 +106,13 @@ private fun ClassicControls(
             .padding(horizontal = 32.dp)
     ) {
         Spacer(modifier = Modifier.weight(1f))
-        MediaInfo(media)
+
+        MediaInfo(
+            media = media,
+            binder = binder,
+            onShowSleepTimer = onShowSleepTimer, // Pass it down
+        )
+
         Spacer(modifier = Modifier.weight(1f))
         SeekBar(
             binder = binder,
@@ -189,21 +182,28 @@ private fun ClassicControls(
 
             IconButton(
                 icon = R.drawable.infinite,
-                enabled = trackLoopEnabled,
-                onClick = { trackLoopEnabled = !trackLoopEnabled },
+                enabled = PlayerPreferences.trackLoopEnabled,
+                onClick = { PlayerPreferences.trackLoopEnabled = !PlayerPreferences.trackLoopEnabled },
                 modifier = Modifier
                     .weight(1f)
                     .size(24.dp)
             )
         }
-
         Spacer(modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun MediaInfo(media: UiMedia) {
+private fun MediaInfo(
+    media: UiMedia,
+    binder: PlayerService.Binder,
+    onShowSleepTimer: () -> Unit // New parameter
+) {
+    val menuState = LocalMenuState.current
+    var mediaItem by remember { mutableStateOf(binder.player.currentMediaItem) }
     val (colorPalette, typography) = LocalAppearance.current
+    var audioDialogOpen by rememberSaveable { mutableStateOf(false) }
+    var boostDialogOpen by rememberSaveable { mutableStateOf(false) }
 
     var artistInfo: List<Info>? by remember { mutableStateOf(null) }
     var maxHeight by rememberSaveable { mutableIntStateOf(0) }
@@ -217,18 +217,42 @@ private fun MediaInfo(media: UiMedia) {
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        AnimatedContent(
-            targetState = media.title,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = ""
-        ) { title ->
-            FadingRow(modifier = Modifier.fillMaxWidth(0.75f)) {
-                BasicText(
-                    text = title,
-                    style = typography.l.bold,
-                    maxLines = 1
-                )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(0.85f)
+        ) {
+            AnimatedContent(
+                targetState = media.title,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "",
+                modifier = Modifier.weight(1f)
+            ) { title ->
+                FadingRow {
+                    BasicText(
+                        text = title,
+                        style = typography.l.bold,
+                        maxLines = 1
+                    )
+                }
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(
+                icon = R.drawable.more,
+                color = colorPalette.text,
+                onClick = {
+                    // This is the corrected way to show the menu
+                    menuState.display {
+                        PlayerMenu(
+                            binder = binder,
+                            mediaItem = mediaItem!!,
+                            onDismiss = menuState::hide,
+                            onShowSpeedDialog = { audioDialogOpen = true },
+                            onShowNormalizationDialog = { boostDialogOpen = true },
+                        )
+                    }
+                },
+                modifier = Modifier.size(24.dp)
+            )
         }
 
         AnimatedContent(
@@ -260,7 +284,6 @@ private fun MediaInfo(media: UiMedia) {
                     }
                     if (media.explicit) {
                         Spacer(Modifier.width(4.dp))
-
                         Image(
                             painter = painterResource(R.drawable.explicit),
                             contentDescription = null,
@@ -281,7 +304,6 @@ private fun MediaInfo(media: UiMedia) {
                 )
                 if (media.explicit) {
                     Spacer(Modifier.width(4.dp))
-
                     Image(
                         painter = painterResource(R.drawable.explicit),
                         contentDescription = null,

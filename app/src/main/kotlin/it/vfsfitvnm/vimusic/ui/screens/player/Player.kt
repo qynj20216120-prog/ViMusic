@@ -408,6 +408,7 @@ fun Player(
         }
 
         val controlsContent: @Composable (modifier: Modifier) -> Unit = { innerModifier ->
+            val onShowSleepTimer = null
             Controls(
                 media = mediaItem!!.toUiMedia(duration),
                 binder = binder,
@@ -415,7 +416,8 @@ fun Player(
                 setLikedAt = { likedAt = it },
                 shouldBePlaying = shouldBePlaying,
                 position = position,
-                modifier = innerModifier
+                modifier = innerModifier,
+                onShowSleepTimer = { onShowSleepTimer }
             )
         }
 
@@ -574,7 +576,7 @@ fun Player(
 
 @Composable
 @OptIn(UnstableApi::class)
-private fun PlayerMenu(
+fun PlayerMenu(
     binder: PlayerService.Binder,
     mediaItem: MediaItem,
     onDismiss: () -> Unit,
