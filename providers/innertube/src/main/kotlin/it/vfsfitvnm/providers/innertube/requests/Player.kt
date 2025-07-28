@@ -1,6 +1,5 @@
 package it.vfsfitvnm.providers.innertube.requests
 
-import io.ktor.client.call.body
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post

@@ -76,7 +76,7 @@ data class PlayerResponse(
             val url: String?,
             val signatureCipher: String?
         ) {
-            suspend fun findUrl(context: Context): String? {
+            fun findUrl(context: Context): String? {
 
                 if (url != null) {
                     return url
