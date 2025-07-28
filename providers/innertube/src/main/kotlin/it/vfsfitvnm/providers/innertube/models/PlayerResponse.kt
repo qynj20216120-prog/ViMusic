@@ -1,8 +1,10 @@
 package it.vfsfitvnm.providers.innertube.models
 
-import it.vfsfitvnm.providers.innertube.Innertube
+
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import io.ktor.http.parseQueryString
+import it.vfsfitvnm.providers.innertube.NewPipeManager
 
 @Serializable
 data class PlayerResponse(
@@ -74,15 +76,49 @@ data class PlayerResponse(
             val url: String?,
             val signatureCipher: String?
         ) {
-            suspend fun findUrl(context: Context) =
-                url ?: signatureCipher?.let { Innertube.decodeSignatureCipher(context, it) }
+            suspend fun findUrl(context: Context): String? {
+
+                if (url != null) {
+                    return url
+                }
+
+                if (signatureCipher != null) {
+                    val videoId = parseQueryString(signatureCipher)["url"]
+                        ?.let { urlString -> parseQueryString(urlString)["v"] }
+
+                    if (videoId == null) {
+                        return null
+                    }
+
+                    val streamUrl = NewPipeManager.getStreamUrl(format = this, videoId = videoId).getOrNull()
+
+                    return streamUrl
+                }
+
+                return null
+            }
         }
     }
 
     @Serializable
     data class VideoDetails(
-        val videoId: String?
+        val videoId: String?,
+        val title: String?,
+        val author: String?,
+        val thumbnail: Thumbnail?
     )
+
+    @Serializable
+    data class Thumbnail(
+        val thumbnails: List<ThumbnailUrl>
+    ) {
+        @Serializable
+        data class ThumbnailUrl(
+            val url: String,
+            val width: Int,
+            val height: Int
+        )
+    }
 }
 
 @Serializable

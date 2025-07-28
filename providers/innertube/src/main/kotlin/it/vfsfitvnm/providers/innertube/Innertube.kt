@@ -27,7 +27,6 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.parameters
-import io.ktor.http.parseQueryString
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -197,33 +196,12 @@ object Innertube {
         }
     }
 
-    suspend fun decodeSignatureCipher(context: Context, cipher: String): String? = runCatchingCancellable {
-        val params = parseQueryString(cipher)
-        val signature = params["s"] ?: return@runCatchingCancellable null
-        val signatureParam = params["sp"] ?: return@runCatchingCancellable null
-        val url = params["url"] ?: return@runCatchingCancellable null
-
-        val actualSignature = getJavaScriptChallenge(context)?.decode(signature)
-            ?: return@runCatchingCancellable null
-        "$url&$signatureParam=$actualSignature"
-    }?.onFailure {
-        logger.error("Failed to decode signature cipher", it)
-        it.printStackTrace()
-    }?.getOrNull()
-
     suspend fun getSignatureTimestamp(context: Context): String? = runCatchingCancellable {
         getJavaScriptChallenge(context)?.timestamp
     }?.onFailure {
         logger.error("Failed to get signature timestamp", it)
         it.printStackTrace()
     }?.getOrNull()
-
-    // Force refresh of JavaScript challenge when needed
-    suspend fun refreshJavaScriptChallenge(context: Context): JavaScriptChallenge? {
-        javascriptChallenge = null
-        lastChallengeUpdate = 0L
-        return getJavaScriptChallenge(context)
-    }
 
     private const val BASE = "/youtubei/v1"
     internal const val BROWSE = "$BASE/browse"

@@ -1,16 +1,18 @@
 package it.vfsfitvnm.providers.innertube.requests
 
-import it.vfsfitvnm.providers.innertube.Innertube
-import it.vfsfitvnm.providers.innertube.models.Context
-import it.vfsfitvnm.providers.innertube.models.PlayerResponse
-import it.vfsfitvnm.providers.innertube.models.bodies.PlayerBody
-import it.vfsfitvnm.providers.utils.runCatchingCancellable
 import io.ktor.client.call.body
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.util.generateNonce
+import it.vfsfitvnm.providers.innertube.Innertube
+import it.vfsfitvnm.providers.innertube.json
+import it.vfsfitvnm.providers.innertube.models.Context
+import it.vfsfitvnm.providers.innertube.models.PlayerResponse
+import it.vfsfitvnm.providers.innertube.models.bodies.PlayerBody
+import it.vfsfitvnm.providers.utils.runCatchingCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 
@@ -24,13 +26,16 @@ private suspend fun Innertube.tryContexts(
         logger.info("Trying ${context.client.clientName} ${context.client.clientVersion} ${context.client.platform}")
         val cpn = generateNonce(16).decodeToString()
         runCatchingCancellable {
-            client.post(if (context.client.music) PLAYER_MUSIC else PLAYER) {
+            // The network call is stored in a variable now
+            val httpResponse = client.post(if (context.client.music) PLAYER_MUSIC else PLAYER) {
                 setBody(
                     body.copy(
                         context = context,
                         cpn = cpn,
                         playbackContext = PlayerBody.PlaybackContext(
                             contentPlaybackContext = PlayerBody.PlaybackContext.ContentPlaybackContext(
+                                // Note: This old signature logic is part of what we are replacing.
+                                // It might fail, but the raw response will tell us why.
                                 signatureTimestamp = getSignatureTimestamp(context)
                             )
                         )
@@ -42,7 +47,20 @@ private suspend fun Innertube.tryContexts(
                 parameter("t", generateNonce(12))
                 header("X-Goog-Api-Format-Version", "2")
                 parameter("id", body.videoId)
-            }.body<PlayerResponse>().also { logger.info("Got $it") }
+            }
+
+            // Get the raw text from the response
+            val responseAsText = httpResponse.bodyAsText()
+
+            // Print the raw text for debugging
+            println("--- RAW PLAYER RESPONSE (Client: ${context.client.clientName}) ---")
+            println(responseAsText)
+            println("----------------------------------------------------")
+
+            // Now, continue to process the text as before
+            json.decodeFromString<PlayerResponse>(responseAsText)
+                .also { logger.info("Got $it") }
+
         }
             ?.getOrNull()
             ?.takeIf { it.isValid }
