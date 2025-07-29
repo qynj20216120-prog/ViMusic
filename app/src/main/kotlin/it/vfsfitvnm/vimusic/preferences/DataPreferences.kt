@@ -6,6 +6,7 @@ import it.vfsfitvnm.vimusic.GlobalPreferencesHolder
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.core.data.enums.CoilDiskCacheSize
 import it.vfsfitvnm.core.data.enums.ExoPlayerDiskCacheSize
+import it.vfsfitvnm.core.data.enums.LyricsCacheSize
 import it.vfsfitvnm.providers.innertube.Innertube
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
@@ -14,6 +15,7 @@ import kotlin.time.Duration.Companion.hours
 object DataPreferences : GlobalPreferencesHolder() {
     var coilDiskCacheMaxSize by enum(CoilDiskCacheSize.`128MB`)
     var exoPlayerDiskCacheMaxSize by enum(ExoPlayerDiskCacheSize.`2GB`)
+    var lyricsCacheMaxSize by enum(LyricsCacheSize.`128MB`)
     var pauseHistory by boolean(false)
     var pausePlaytime by boolean(false)
     var pauseSearchHistory by boolean(false)

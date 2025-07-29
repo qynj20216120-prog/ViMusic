@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
+import coil3.imageLoader
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.preferences.DataPreferences
@@ -25,7 +26,7 @@ import it.vfsfitvnm.vimusic.ui.components.themed.LinearProgressIndicator
 import it.vfsfitvnm.vimusic.ui.components.themed.SecondaryTextButton
 import it.vfsfitvnm.vimusic.ui.screens.Route
 import it.vfsfitvnm.core.data.enums.ExoPlayerDiskCacheSize
-import coil3.imageLoader
+import it.vfsfitvnm.vimusic.utils.LyricsCacheManager
 
 @OptIn(UnstableApi::class)
 @Route
@@ -80,6 +81,49 @@ fun CacheSettings() = with(DataPreferences) {
                 )
             }
         }
+
+        var lyricsCacheSize by remember { mutableLongStateOf(LyricsCacheManager.getCacheSize(context)) }
+        val formattedLyricsCacheSize = remember(lyricsCacheSize) {
+            Formatter.formatShortFileSize(context, lyricsCacheSize)
+        }
+        val lyricsSizePercentage = remember(lyricsCacheSize, lyricsCacheMaxSize) {
+            lyricsCacheSize.toFloat() / lyricsCacheMaxSize.bytes.coerceAtLeast(1)
+        }
+
+        SettingsGroup(
+            title = stringResource(R.string.lyrics_cache),
+            description = stringResource(
+                R.string.format_cache_space_used_percentage,
+                formattedLyricsCacheSize,
+                (lyricsSizePercentage * 100).toInt()
+            ),
+            trailingContent = {
+                SecondaryTextButton(
+                    text = stringResource(R.string.clear),
+                    onClick = {
+                        if (LyricsCacheManager.clear(context)) {
+                            lyricsCacheSize = 0L
+                        }
+                    },
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+            }
+        ) {
+            LinearProgressIndicator(
+                progress = lyricsSizePercentage,
+                strokeCap = StrokeCap.Round,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+                    .padding(start = 32.dp, end = 16.dp)
+            )
+            EnumValueSelectorSettingsEntry(
+                title = stringResource(R.string.max_size),
+                selectedValue = lyricsCacheMaxSize,
+                onValueSelect = { lyricsCacheMaxSize = it }
+            )
+        }
+
         binder?.cache?.let { cache ->
             val diskCacheSize by remember { derivedStateOf { cache.cacheSpace } }
             val formattedSize = remember(diskCacheSize) {

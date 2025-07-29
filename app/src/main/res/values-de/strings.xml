@@ -398,4 +398,5 @@
     <string name="import_error_message">Ein Fehler ist aufgetreten: %1$s</string>
     <string name="import_initializing">Importvorgang wird initialisiert …</string>
     <string name="unknown_error">Es ist ein unbekannter Fehler aufgetreten</string>
+    <string name="lyrics_cache">Liedtext-Cache</string>
 </resources>
