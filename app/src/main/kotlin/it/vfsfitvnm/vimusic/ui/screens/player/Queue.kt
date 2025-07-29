@@ -449,126 +449,147 @@ fun Queue(
                     .height(64.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextToggle(
-                    state = PlayerPreferences.queueLoopEnabled,
-                    toggleState = {
-                        PlayerPreferences.queueLoopEnabled = !PlayerPreferences.queueLoopEnabled
-                    },
-                    name = stringResource(R.string.queue_loop)
-                )
+                // 1. Left container with a weight of 1
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    TextToggle(
+                        state = PlayerPreferences.queueLoopEnabled,
+                        toggleState = {
+                            PlayerPreferences.queueLoopEnabled = !PlayerPreferences.queueLoopEnabled
+                        },
+                        name = stringResource(R.string.queue_loop)
+                    )
+                }
 
-                Spacer(modifier = Modifier.weight(1f))
+                // 2. Center item with no weight
                 Image(
                     painter = painterResource(R.drawable.chevron_down),
                     contentDescription = null,
                     colorFilter = ColorFilter.tint(colorPalette.text),
                     modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.weight(1f))
 
-                BasicText(
-                    text = pluralStringResource(
-                        id = R.plurals.song_count_plural,
-                        count = windows.size,
-                        windows.size
-                    ),
-                    style = typography.xxs.medium,
-                    modifier = Modifier
-                        .clip(16.dp.roundedShape)
-                        .clickable {
-                            fun addToPlaylist(playlist: Playlist, index: Int) = transaction {
-                                val playlistId = Database.instance
-                                    .insert(playlist)
-                                    .takeIf { it != -1L } ?: playlist.id
+                // 3. Right container with a weight of 1
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterEnd
+                ) {
+                    BasicText(
+                        text = pluralStringResource(
+                            id = R.plurals.song_count_plural,
+                            count = windows.size,
+                            windows.size
+                        ),
+                        style = typography.xxs.medium,
+                        modifier = Modifier
+                            .clip(16.dp.roundedShape)
+                            .clickable {
+                                fun addToPlaylist(playlist: Playlist, index: Int) = transaction {
+                                    val playlistId = Database.instance
+                                        .insert(playlist)
+                                        .takeIf { it != -1L } ?: playlist.id
 
-                                windows.forEachIndexed { i, window ->
-                                    val mediaItem = window.mediaItem
+                                    windows.forEachIndexed { i, window ->
+                                        val mediaItem = window.mediaItem
 
-                                    Database.instance.insert(mediaItem)
-                                    Database.instance.insert(
-                                        SongPlaylistMap(
-                                            songId = mediaItem.mediaId,
-                                            playlistId = playlistId,
-                                            position = index + i
+                                        Database.instance.insert(mediaItem)
+                                        Database.instance.insert(
+                                            SongPlaylistMap(
+                                                songId = mediaItem.mediaId,
+                                                playlistId = playlistId,
+                                                position = index + i
+                                            )
                                         )
+                                    }
+                                }
+
+                                menuState.display {
+                                    var isCreatingNewPlaylist by rememberSaveable {
+                                        mutableStateOf(
+                                            false
+                                        )
+                                    }
+
+                                    val playlistPreviews by remember {
+                                        Database.instance
+                                            .playlistPreviews(
+                                                sortBy = PlaylistSortBy.DateAdded,
+                                                sortOrder = SortOrder.Descending
+                                            )
+                                            .onFirst { isCreatingNewPlaylist = it.isEmpty() }
+                                    }.collectAsState(initial = null, context = Dispatchers.IO)
+
+                                    if (isCreatingNewPlaylist) TextFieldDialog(
+                                        hintText = stringResource(R.string.enter_playlist_name_prompt),
+                                        onDismiss = { isCreatingNewPlaylist = false },
+                                        onAccept = { text ->
+                                            menuState.hide()
+                                            addToPlaylist(Playlist(name = text), 0)
+                                        }
                                     )
-                                }
-                            }
 
-                            menuState.display {
-                                var isCreatingNewPlaylist by rememberSaveable { mutableStateOf(false) }
-
-                                val playlistPreviews by remember {
-                                    Database.instance
-                                        .playlistPreviews(
-                                            sortBy = PlaylistSortBy.DateAdded,
-                                            sortOrder = SortOrder.Descending
-                                        )
-                                        .onFirst { isCreatingNewPlaylist = it.isEmpty() }
-                                }.collectAsState(initial = null, context = Dispatchers.IO)
-
-                                if (isCreatingNewPlaylist) TextFieldDialog(
-                                    hintText = stringResource(R.string.enter_playlist_name_prompt),
-                                    onDismiss = { isCreatingNewPlaylist = false },
-                                    onAccept = { text ->
-                                        menuState.hide()
-                                        addToPlaylist(Playlist(name = text), 0)
-                                    }
-                                )
-
-                                Menu {
-                                    Row(
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier
-                                            .padding(horizontal = 24.dp, vertical = 8.dp)
-                                            .fillMaxWidth()
-                                    ) {
-                                        BasicText(
-                                            text = stringResource(R.string.add_queue_to_playlist),
-                                            style = typography.m.semiBold,
-                                            overflow = TextOverflow.Ellipsis,
-                                            maxLines = 2,
-                                            modifier = Modifier.weight(weight = 2f, fill = false)
-                                        )
-
-                                        Spacer(modifier = Modifier.width(8.dp))
-
-                                        SecondaryTextButton(
-                                            text = stringResource(R.string.new_playlist),
-                                            onClick = { isCreatingNewPlaylist = true },
-                                            alternative = true,
-                                            modifier = Modifier.weight(weight = 1f, fill = false)
-                                        )
-                                    }
-
-                                    if (playlistPreviews?.isEmpty() == true)
-                                        Spacer(modifier = Modifier.height(160.dp))
-
-                                    playlistPreviews?.forEach { playlistPreview ->
-                                        MenuEntry(
-                                            icon = R.drawable.playlist,
-                                            text = playlistPreview.playlist.name,
-                                            secondaryText = pluralStringResource(
-                                                id = R.plurals.song_count_plural,
-                                                count = playlistPreview.songCount,
-                                                playlistPreview.songCount
-                                            ),
-                                            onClick = {
-                                                menuState.hide()
-                                                addToPlaylist(
-                                                    playlistPreview.playlist,
-                                                    playlistPreview.songCount
+                                    Menu {
+                                        Row(
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .padding(horizontal = 24.dp, vertical = 8.dp)
+                                                .fillMaxWidth()
+                                        ) {
+                                            BasicText(
+                                                text = stringResource(R.string.add_queue_to_playlist),
+                                                style = typography.m.semiBold,
+                                                overflow = TextOverflow.Ellipsis,
+                                                maxLines = 2,
+                                                modifier = Modifier.weight(
+                                                    weight = 2f,
+                                                    fill = false
                                                 )
-                                            }
-                                        )
+                                            )
+
+                                            Spacer(modifier = Modifier.width(8.dp))
+
+                                            SecondaryTextButton(
+                                                text = stringResource(R.string.new_playlist),
+                                                onClick = { isCreatingNewPlaylist = true },
+                                                alternative = true,
+                                                modifier = Modifier.weight(
+                                                    weight = 1f,
+                                                    fill = false
+                                                )
+                                            )
+                                        }
+
+                                        if (playlistPreviews?.isEmpty() == true)
+                                            Spacer(modifier = Modifier.height(160.dp))
+
+                                        playlistPreviews?.forEach { playlistPreview ->
+                                            MenuEntry(
+                                                icon = R.drawable.playlist,
+                                                text = playlistPreview.playlist.name,
+                                                secondaryText = pluralStringResource(
+                                                    id = R.plurals.song_count_plural,
+                                                    count = playlistPreview.songCount,
+                                                    playlistPreview.songCount
+                                                ),
+                                                onClick = {
+                                                    menuState.hide()
+                                                    addToPlaylist(
+                                                        playlistPreview.playlist,
+                                                        playlistPreview.songCount
+                                                    )
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
-                        .background(colorPalette.background1)
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                            .background(colorPalette.background1)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
             }
         }
     }

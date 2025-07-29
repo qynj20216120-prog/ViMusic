@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
@@ -57,7 +58,6 @@ fun Controls(
     shouldBePlaying: Boolean,
     position: Long,
     modifier: Modifier = Modifier,
-    onShowSleepTimer: () -> Unit, // New parameter
 ) {
     val shouldBePlayingTransition = updateTransition(
         targetState = shouldBePlaying,
@@ -79,7 +79,6 @@ fun Controls(
             likedAt = likedAt,
             setLikedAt = setLikedAt,
             playButtonRadius = playButtonRadius,
-            onShowSleepTimer = onShowSleepTimer, // Pass it down
             modifier = modifier
         )
     }
@@ -94,7 +93,6 @@ private fun ClassicControls(
     likedAt: Long?,
     setLikedAt: (Long?) -> Unit,
     playButtonRadius: Dp,
-    onShowSleepTimer: () -> Unit, // New parameter
     modifier: Modifier = Modifier
 ) {
     val (colorPalette) = LocalAppearance.current
@@ -110,7 +108,6 @@ private fun ClassicControls(
         MediaInfo(
             media = media,
             binder = binder,
-            onShowSleepTimer = onShowSleepTimer, // Pass it down
         )
 
         Spacer(modifier = Modifier.weight(1f))
@@ -196,14 +193,11 @@ private fun ClassicControls(
 @Composable
 private fun MediaInfo(
     media: UiMedia,
-    binder: PlayerService.Binder,
-    onShowSleepTimer: () -> Unit // New parameter
+    binder: PlayerService.Binder
 ) {
     val menuState = LocalMenuState.current
     var mediaItem by remember { mutableStateOf(binder.player.currentMediaItem) }
     val (colorPalette, typography) = LocalAppearance.current
-    var audioDialogOpen by rememberSaveable { mutableStateOf(false) }
-    var boostDialogOpen by rememberSaveable { mutableStateOf(false) }
 
     var artistInfo: List<Info>? by remember { mutableStateOf(null) }
     var maxHeight by rememberSaveable { mutableIntStateOf(0) }
@@ -218,36 +212,48 @@ private fun MediaInfo(
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth(0.85f)
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(36.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            AnimatedContent(
-                targetState = media.title,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                label = "",
-                modifier = Modifier.weight(1f)
-            ) { title ->
-                FadingRow {
-                    BasicText(
-                        text = title,
-                        style = typography.l.bold,
-                        maxLines = 1
-                    )
+            Spacer(modifier = Modifier.size(24.dp))
+
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                AnimatedContent(
+                    targetState = media.title,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "SongTitle"
+                ) { title ->
+                    // Swapped back to FadingRow to get the fade effect.
+                    // The modifier makes it narrower, as you wanted.
+                    FadingRow(
+                        modifier = Modifier.fillMaxWidth(0.7f)
+                    ) {
+                        // The parent Box will center this content.
+                        BasicText(
+                            text = title,
+                            style = typography.l.bold,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
+
             IconButton(
                 icon = R.drawable.more,
                 color = colorPalette.text,
                 onClick = {
-                    // This is the corrected way to show the menu
                     menuState.display {
                         PlayerMenu(
                             binder = binder,
                             mediaItem = mediaItem!!,
                             onDismiss = menuState::hide,
-                            onShowSpeedDialog = { audioDialogOpen = true },
-                            onShowNormalizationDialog = { boostDialogOpen = true },
+                            onShowSpeedDialog = { },
+                            onShowNormalizationDialog = { },
                         )
                     }
                 },
@@ -255,10 +261,11 @@ private fun MediaInfo(
             )
         }
 
+        // Artist info section (no changes)
         AnimatedContent(
             targetState = media to artistInfo,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = ""
+            label = "ArtistInfo"
         ) { (media, state) ->
             state?.let { artists ->
                 FadingRow(
@@ -267,21 +274,50 @@ private fun MediaInfo(
                         .heightIn(maxHeight.px.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    artists.fastForEachIndexed { i, artist ->
-                        if (i == artists.lastIndex && artists.size > 1) BasicText(
-                            text = " & ",
-                            style = typography.s.semiBold.secondary
-                        )
-                        BasicText(
-                            text = artist.name.orEmpty(),
-                            style = typography.s.bold.secondary,
-                            modifier = Modifier.clickable { artistRoute.global(artist.id) }
-                        )
-                        if (i != artists.lastIndex && i + 1 != artists.lastIndex) BasicText(
-                            text = ", ",
-                            style = typography.s.semiBold.secondary
-                        )
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        artists.fastForEachIndexed { i, artist ->
+                            if (i == artists.lastIndex && artists.size > 1) BasicText(
+                                text = " & ",
+                                style = typography.s.semiBold.secondary
+                            )
+                            BasicText(
+                                text = artist.name.orEmpty(),
+                                style = typography.s.bold.secondary,
+                                modifier = Modifier.clickable { artistRoute.global(artist.id) }
+                            )
+                            if (i != artists.lastIndex && i + 1 != artists.lastIndex) BasicText(
+                                text = ", ",
+                                style = typography.s.semiBold.secondary
+                            )
+                        }
+                        if (media.explicit) {
+                            Spacer(Modifier.width(4.dp))
+                            Image(
+                                painter = painterResource(R.drawable.explicit),
+                                contentDescription = null,
+                                colorFilter = ColorFilter.tint(colorPalette.text),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
+                }
+            } ?: FadingRow(
+                modifier = Modifier.fillMaxWidth(0.75f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicText(
+                        text = media.artist,
+                        style = typography.s.semiBold.secondary,
+                        maxLines = 1,
+                        modifier = Modifier.onGloballyPositioned { maxHeight = it.size.height }
+                    )
                     if (media.explicit) {
                         Spacer(Modifier.width(4.dp))
                         Image(
@@ -291,25 +327,6 @@ private fun MediaInfo(
                             modifier = Modifier.size(15.dp)
                         )
                     }
-                }
-            } ?: FadingRow(
-                modifier = Modifier.fillMaxWidth(0.75f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BasicText(
-                    text = media.artist,
-                    style = typography.s.semiBold.secondary,
-                    maxLines = 1,
-                    modifier = Modifier.onGloballyPositioned { maxHeight = it.size.height }
-                )
-                if (media.explicit) {
-                    Spacer(Modifier.width(4.dp))
-                    Image(
-                        painter = painterResource(R.drawable.explicit),
-                        contentDescription = null,
-                        colorFilter = ColorFilter.tint(colorPalette.text),
-                        modifier = Modifier.size(15.dp)
-                    )
                 }
             }
         }

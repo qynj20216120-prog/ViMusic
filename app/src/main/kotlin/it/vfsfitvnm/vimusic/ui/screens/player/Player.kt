@@ -188,7 +188,7 @@ fun Player(
         state = layoutState,
         modifier = modifier.fillMaxSize(),
         onDismiss = {
-            binder.let { onDismiss(it) }
+            onDismiss(binder)
             layoutState.dismissSoft()
         },
         backHandlerEnabled = !menuState.isDisplayed,
@@ -201,7 +201,7 @@ fun Player(
                         if (horizontalSwipeToClose) modifier.onSwipe(
                             animateOffset = true,
                             onSwipeOut = { animationJob ->
-                                binder.let { onDismiss(it) }
+                                onDismiss(binder)
                                 animationJob.join()
                                 layoutState.dismissSoft()
                             }
@@ -408,7 +408,6 @@ fun Player(
         }
 
         val controlsContent: @Composable (modifier: Modifier) -> Unit = { innerModifier ->
-            val onShowSleepTimer = null
             Controls(
                 media = mediaItem!!.toUiMedia(duration),
                 binder = binder,
@@ -416,8 +415,7 @@ fun Player(
                 setLikedAt = { likedAt = it },
                 shouldBePlaying = shouldBePlaying,
                 position = position,
-                modifier = innerModifier,
-                onShowSleepTimer = { onShowSleepTimer }
+                modifier = innerModifier
             )
         }
 
