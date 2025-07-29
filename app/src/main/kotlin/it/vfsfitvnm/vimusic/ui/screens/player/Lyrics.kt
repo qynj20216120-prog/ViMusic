@@ -111,6 +111,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import it.vfsfitvnm.providers.lyricsplus.LyricsPlus
 import it.vfsfitvnm.providers.lyricsplus.LyricsPlusSyncManager
+import it.vfsfitvnm.vimusic.BuildConfig
 import kotlinx.coroutines.isActive
 
 private const val UPDATE_DELAY = 50L
@@ -215,8 +216,11 @@ fun Lyrics(
                                 }
 
                                 val wordLevelLyrics = LyricsPlus.fetchLyrics(
+                                    baseUrl = BuildConfig.LYRICS_API_BASE,
                                     title = title,
-                                    artist = artist
+                                    artist = artist,
+                                    album = album,
+                                    duration = duration.toInt()
                                 )
 
                                 if (!wordLevelLyrics.isNullOrEmpty()) {
@@ -266,10 +270,12 @@ fun Lyrics(
                                 wordSyncedManager = null
                                 wordSyncedAvailable = false
 
-                                // ✅ Try LyricsPlus word-level first
                                 val wordLevelLyrics = LyricsPlus.fetchLyrics(
+                                    baseUrl = BuildConfig.LYRICS_API_BASE,
                                     title = title,
-                                    artist = artist
+                                    artist = artist,
+                                    album = album,
+                                    duration = duration.toInt()
                                 )
 
                                 if (!wordLevelLyrics.isNullOrEmpty()) {

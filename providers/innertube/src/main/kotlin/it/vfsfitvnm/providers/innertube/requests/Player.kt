@@ -48,15 +48,8 @@ private suspend fun Innertube.tryContexts(
                 parameter("id", body.videoId)
             }
 
-            // Get the raw text from the response
             val responseAsText = httpResponse.bodyAsText()
 
-            // Print the raw text for debugging
-            println("--- RAW PLAYER RESPONSE (Client: ${context.client.clientName}) ---")
-            println(responseAsText)
-            println("----------------------------------------------------")
-
-            // Now, continue to process the text as before
             json.decodeFromString<PlayerResponse>(responseAsText)
                 .also { logger.info("Got $it") }
 

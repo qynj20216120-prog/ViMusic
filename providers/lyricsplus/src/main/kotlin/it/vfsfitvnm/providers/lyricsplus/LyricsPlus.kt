@@ -20,32 +20,28 @@ object LyricsPlus {
     }
 
     suspend fun fetchLyrics(
+        baseUrl: String,
         title: String,
         artist: String,
+        album: String? = null,
+        duration: Int? = null
     ): List<LyricLine>? {
-        val url = "https://lyricsplus.prjktla.workers.dev/v2/lyrics/get"
+        val url = "$baseUrl/v2/lyrics/get"
+
 
         return try {
             val response: HttpResponse = client.get(url) {
                 parameter("title", title)
                 parameter("artist", artist)
+                parameter("album", album)
+                parameter("duration", duration)
             }
 
             val responseText = response.bodyAsText()
-            println("[LyricsPlus] Raw response: $responseText")
-
-            if (!responseText.trim().startsWith("{\"type\"")) {
-                println("[LyricsPlus] Response is not a valid lyrics object. Skipping.")
-                return null
-            }
 
             val body = Json { ignoreUnknownKeys = true }
                 .decodeFromString<LyricsResponse>(responseText)
 
-            if (body.type != "Word") {
-                println("[LyricsPlus] Unsupported type: ${body.type}")
-                return null
-            }
 
             body.lyrics.map { line ->
                 LyricLine(
@@ -60,11 +56,8 @@ object LyricsPlus {
                         )
                     }
                 )
-            }.also {
-                println("[LyricsPlus] Parsed ${it.size} word-synced lines")
             }
         } catch (e: Exception) {
-            println("[LyricsPlus] Exception during fetch: ${e.message}")
             null
         }
     }

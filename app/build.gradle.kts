@@ -1,5 +1,6 @@
 import org.jetbrains.kotlin.compose.compiler.gradle.ComposeFeatureFlag
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -9,6 +10,14 @@ plugins {
     alias(libs.plugins.ksp)
     id("org.jetbrains.kotlin.plugin.serialization")
 }
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        load(file.inputStream())
+    }
+}
+
 
 android {
     val appId = "${project.group}"
@@ -49,6 +58,7 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-DEBUG"
             manifestPlaceholders["appName"] = "ViMusic Debug"
+            buildConfigField("String", "LYRICS_API_BASE", "\"${localProperties["LYRICS_API_BASE"]}\"")
         }
 
         release {
@@ -56,6 +66,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             manifestPlaceholders["appName"] = "ViMusic"
+            buildConfigField("String", "LYRICS_API_BASE", "\"${localProperties["LYRICS_API_BASE"]}\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
