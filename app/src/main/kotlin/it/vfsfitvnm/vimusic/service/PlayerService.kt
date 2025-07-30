@@ -1415,13 +1415,9 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                             }
                         }
 
-                        runCatching {
-                            runBlocking(Dispatchers.IO) {
-                                body.context?.let { format.findUrl(it) }
-                            }
-                        }.getOrElse {
-                            throw RestrictedVideoException(it)
-                        }
+                        runBlocking(Dispatchers.IO) {
+                            format.findUrl(mediaId)
+                        } ?: throw RestrictedVideoException(Exception("findUrl returned null for $mediaId"))
                     }
 
                     "UNPLAYABLE" -> throw UnplayableException()

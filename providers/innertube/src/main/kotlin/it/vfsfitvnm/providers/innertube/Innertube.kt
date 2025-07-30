@@ -5,7 +5,6 @@ import it.vfsfitvnm.providers.innertube.models.MusicNavigationButtonRenderer
 import it.vfsfitvnm.providers.innertube.models.NavigationEndpoint
 import it.vfsfitvnm.providers.innertube.models.Runs
 import it.vfsfitvnm.providers.innertube.models.Thumbnail
-import it.vfsfitvnm.providers.utils.runCatchingCancellable
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpResponseValidator
@@ -19,11 +18,9 @@ import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.HttpSendPipeline
-import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.headers
 import io.ktor.client.request.host
-import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.parameters
@@ -40,9 +37,6 @@ internal val json = Json {
 }
 
 object Innertube {
-    private var javascriptChallenge: JavaScriptChallenge? = null
-    private var lastChallengeUpdate = 0L
-    private const val CHALLENGE_CACHE_DURATION = 30 * 60 * 1000L // 30 minutes
     private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
     private val OriginInterceptor = createClientPlugin("OriginInterceptor") {
         client.sendPipeline.intercept(HttpSendPipeline.State) {
@@ -122,86 +116,6 @@ object Innertube {
             }
         }
     }
-
-    @Suppress("all")
-    private val regexes = listOf(
-        // New, more reliable patterns translated from yt-dlp
-        """\b[cs]\s*&&\s*[adf]\.set\([^,]+\s*,\s*encodeURIComponent\s*\(\s*([a-zA-Z0-9$]+)\(""".toRegex(),
-        """(?:\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,})\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\s*\)""".toRegex(),
-        """([a-zA-Z0-9$]+)\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\);""".toRegex(),
-        // Original patterns (kept as fallbacks)
-        """\bm=([a-zA-Z0-9$]{2,})\(decodeURIComponent\(h\.s\)\)""".toRegex(),
-        """\bc&&\(c=([a-zA-Z0-9$]{2,})\(decodeURIComponent\(c\)\)""".toRegex()
-    )
-
-    private suspend fun getJavaScriptChallenge(context: Context): JavaScriptChallenge? {
-        val currentTime = System.currentTimeMillis()
-
-        // Check if we need to refresh the challenge
-        if (javascriptChallenge != null &&
-            (currentTime - lastChallengeUpdate) < CHALLENGE_CACHE_DURATION) {
-            return javascriptChallenge
-        }
-
-        return try {
-            context.client.getConfiguration()
-            val jsUrl = context.client.jsUrl ?: return null
-
-            // Remove artificial delay - it's suspicious
-            // delay(Random.nextLong(100, 500)) // REMOVED
-
-            val sourceFile = baseClient
-                .get("${context.client.root}$jsUrl") {
-                    context.apply()
-                    // Simplified headers - less suspicious
-                    header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                    header("Referer", "${context.client.root}/")
-                    // Remove Accept header manipulation
-                }
-                .bodyAsText()
-
-            val timestamp = "(?:signatureTimestamp|sts):(\\d{5})".toRegex()
-                .find(sourceFile)
-                ?.groups
-                ?.get(1)
-                ?.value
-                ?.trim()
-                ?.takeIf { it.isNotBlank() } ?: return null
-
-            val functionName = regexes.firstNotNullOfOrNull { regex ->
-                regex
-                    .find(sourceFile)
-                    ?.groups
-                    ?.get(1)
-                    ?.value
-                    ?.trim()
-                    ?.takeIf { it.isNotBlank() }
-            } ?: return null
-
-            JavaScriptChallenge(
-                source = sourceFile
-                    .replace("document.location.hostname", "\"youtube.com\"")
-                    .replace("window.location.hostname", "\"youtube.com\"")
-                    .replace("XMLHttpRequest.prototype.fetch", "\"aaa\""),
-                timestamp = timestamp,
-                functionName = functionName
-            ).also {
-                javascriptChallenge = it
-                lastChallengeUpdate = currentTime
-                logger.info("JavaScript challenge updated successfully")
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to get JavaScript challenge", e)
-            null
-        }
-    }
-
-    suspend fun getSignatureTimestamp(context: Context): String? = runCatchingCancellable {
-        getJavaScriptChallenge(context)?.timestamp
-    }?.onFailure {
-        logger.error("Failed to get signature timestamp", it)
-        it.printStackTrace()
-    }?.getOrNull()
 
     private const val BASE = "/youtubei/v1"
     internal const val BROWSE = "$BASE/browse"

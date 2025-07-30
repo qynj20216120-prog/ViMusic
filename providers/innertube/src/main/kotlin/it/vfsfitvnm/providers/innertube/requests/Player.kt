@@ -30,14 +30,7 @@ private suspend fun Innertube.tryContexts(
                 setBody(
                     body.copy(
                         context = context,
-                        cpn = cpn,
-                        playbackContext = PlayerBody.PlaybackContext(
-                            contentPlaybackContext = PlayerBody.PlaybackContext.ContentPlaybackContext(
-                                // Note: This old signature logic is part of what we are replacing.
-                                // It might fail, but the raw response will tell us why.
-                                signatureTimestamp = getSignatureTimestamp(context)
-                            )
-                        )
+                        cpn = cpn
                     )
                 )
 
@@ -77,6 +70,6 @@ suspend fun Innertube.player(body: PlayerBody): Result<PlayerResponse?>? = runCa
         Context.DefaultIOS,
         Context.DefaultWeb,
         Context.DefaultTV,
-        Context.DefaultAndroidMusic
+        Context.DefaultAndroid
     )
 }

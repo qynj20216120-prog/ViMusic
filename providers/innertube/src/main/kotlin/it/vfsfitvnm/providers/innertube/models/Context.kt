@@ -170,7 +170,7 @@ data class Context(
             client = Client(
                 clientId = 67,
                 clientName = "WEB_REMIX",
-                clientVersion = "1.20220606.03.00",
+                clientVersion = "1.20250310.01.00",
                 platform = "DESKTOP",
                 userAgent = UserAgents.DESKTOP,
                 referer = "https://music.youtube.com/",
@@ -182,11 +182,11 @@ data class Context(
             client = Client(
                 clientId = 5,
                 clientName = "IOS",
-                clientVersion = "20.03.02",
+                clientVersion = "20.10.4",
                 deviceMake = "Apple",
                 deviceModel = "iPhone16,2",
                 osName = "iPhone",
-                osVersion = "18.2.1.22C161",
+                osVersion = "18.3.2.22D82",
                 acceptHeader = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                 userAgent = UserAgents.IOS,
                 apiKey = "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
@@ -198,9 +198,9 @@ data class Context(
             client = Client(
                 clientId = 3,
                 clientName = "ANDROID",
-                clientVersion = "19.44.38",
+                clientVersion = "18.13.37",
                 osName = "Android",
-                osVersion = "11",
+                osVersion = "13",
                 platform = "MOBILE",
                 androidSdkVersion = 30,
                 userAgent = UserAgents.ANDROID,
@@ -209,26 +209,11 @@ data class Context(
             )
         )
 
-        val DefaultAndroidMusic = Context(
-            client = Client(
-                clientId = 21,
-                clientName = "ANDROID_MUSIC",
-                clientVersion = "7.27.52",
-                platform = "MOBILE",
-                osVersion = "11",
-                androidSdkVersion = 30,
-                userAgent = UserAgents.ANDROID_MUSIC,
-                apiKey = "AIzaSyAOghZGza2MQSZkY_zfZ370N-PUdXEo8AI",
-                music = true
-            )
-        )
-
         val DefaultTV = Context(
             client = Client(
-                clientId = 7,
-                clientName = "TVHTML5",
-                clientVersion = "7.20241201.18.00",
-                platform = "TV",
+                clientId = 85,
+                clientName = "TVHTML5_SIMPLY_EMBEDDED_PLAYER",
+                clientVersion = "2.0",
                 userAgent = UserAgents.TV,
                 referer = "https://www.youtube.com/",
                 music = false
@@ -249,12 +234,8 @@ val validCountryCodes =
 
 @Suppress("MaximumLineLength")
 object UserAgents {
-    const val DESKTOP =
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.157 Safari/537.36"
-    const val ANDROID = "com.google.android.youtube/19.44.38 (Linux; U; Android 11) gzip"
-    const val ANDROID_MUSIC =
-        "com.google.android.apps.youtube.music/7.27.52 (Linux; U; Android 11) gzip"
-    const val PLAYSTATION = "Mozilla/5.0 (PlayStation 4 5.55) AppleWebKit/601.2 (KHTML, like Gecko)"
-    const val IOS = "com.google.ios.youtube/20.03.02 (iPhone16,2; U; CPU iOS 18_2_1 like Mac OS X;)"
-    const val TV = "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version"
+    const val DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+    const val ANDROID = "com.google.android.youtube/18.13.37 (Linux; U; Android 13; Pixel 6)"
+    const val IOS = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
+    const val TV = "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15"
 }
