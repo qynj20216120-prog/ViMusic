@@ -16,22 +16,25 @@
   <img src="./fastlane/metadata/android/en-US/images/phoneScreenshots/6.png" width="30%" />
 </p>
 
-## Features
+#### ⭐ Fork-Exclusive Features
+* 🎤 **Word-Level Synced Lyrics:** Real-time, per-word highlighting for a true karaoke experience.
+* ↔️ **Generic Playlist Import:** Import your playlists from any source that can export to a `.csv` file.
+* 💾 **Intelligent Lyrics Caching:** Word-level lyrics are cached locally to save data and reduce loading times.
+* 🚀 **Enhanced Reliability:** Uses the battle-tested **NewPipeExtractor** engine for fetching music streams.
 
-- Play (almost) any song or video from YouTube Music
-- Play music from your device
-- Play songs in the background
-- Cache song for offline playback
-- Search for songs, albums, artists videos and playlists
-- Discover new songs by mood/genre
-- Import playlists from YouTube
-- Fetch, display and edit songs lyrics or synchronized lyrics
-- Manage your playlists locally or synchronize with the cloud
-- Highly customizable (dynamic theme, Material You, ...)
-- Normalize audio for the perfect listening experience
-- Listen from your car using Android Auto
-- Open YouTube/YouTube Music links (`watch`, `playlist`, `channel`, etc.) with ViMusic
-- Ridiculously lightweight APK
+#### Inherited from Original ViMusic
+* 🎶 **Play from YouTube Music:** Play (almost) any song or video from YouTube Music.
+* 📁 **Local Device Files:** Play music stored on your device.
+* 🌙 **Background Play:** Keep your music playing when the app is in the background.
+* ✈️ **Offline Caching:** Cache songs for offline playback.
+* 🔎 **Powerful Search:** Search for songs, albums, artists, videos, and playlists.
+* ❤️ **Discover Music:** Find new songs by mood and genre.
+* 📝 **Lyrics Support:** Fetch, display, and edit standard synchronized lyrics.
+* 🎨 **Highly Customizable:** Dynamic theming, Material You support, and more.
+* 🔊 **Audio Normalization:** Ensures a consistent listening experience.
+* 🚗 **Android Auto:** Listen from your car.
+* 🔗 **Link Handling:** Opens YouTube/YouTube Music links directly.
+* 깃털 **Lightweight:** Ridiculously small APK size.
 
 ## Installation
 
