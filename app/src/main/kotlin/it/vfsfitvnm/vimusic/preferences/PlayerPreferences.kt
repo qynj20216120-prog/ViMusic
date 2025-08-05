@@ -43,7 +43,7 @@ object PlayerPreferences : GlobalPreferencesHolder() {
     var horizontalSwipeToClose by boolean(false)
     var horizontalSwipeToRemoveItem by boolean(false)
 
-    var playerLayout by enum(PlayerLayout.New)
+    var playerLayout by enum(PlayerLayout.Classic)
     var seekBarStyle by enum(SeekBarStyle.Wavy)
     var wavySeekBarQuality by enum(WavySeekBarQuality.Great)
     var showLike by boolean(false)
