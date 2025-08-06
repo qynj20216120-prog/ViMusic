@@ -1,23 +1,18 @@
 package it.vfsfitvnm.providers.innertube
 
-import io.ktor.http.URLBuilder
-import io.ktor.http.parseQueryString
-import it.vfsfitvnm.providers.innertube.models.PlayerResponse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
-import org.schabi.newpipe.extractor.exceptions.ParsingException
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
-import org.schabi.newpipe.extractor.services.youtube.YoutubeJavaScriptPlayerManager
+import org.schabi.newpipe.extractor.stream.StreamInfo
 import java.io.IOException
 
-/**
- * A custom Downloader implementation that uses OkHttp to make requests.
- * This makes the module self-contained and avoids needing other Android-specific dependencies.
- */
 private class NewPipeDownloaderImpl : Downloader() {
     private val client = OkHttpClient.Builder().build()
 
@@ -26,9 +21,12 @@ private class NewPipeDownloaderImpl : Downloader() {
         val requestBuilder = okhttp3.Request.Builder()
             .method(request.httpMethod(), request.dataToSend()?.toRequestBody())
             .url(request.url())
+            .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
         request.headers().forEach { (headerName, headerValueList) ->
-            requestBuilder.addHeader(headerName, headerValueList.joinToString(","))
+            if (!headerName.equals("User-Agent", ignoreCase = true)) {
+                requestBuilder.addHeader(headerName, headerValueList.joinToString(","))
+            }
         }
 
         val response = client.newCall(requestBuilder.build()).execute()
@@ -44,37 +42,19 @@ private class NewPipeDownloaderImpl : Downloader() {
     }
 }
 
-/**
- * Singleton object to manage NewPipeExtractor functionality.
- * It handles its own initialization.
- */
 object NewPipeManager {
     init {
-        // Initialize NewPipe with our custom downloader implementation.
         NewPipe.init(NewPipeDownloaderImpl())
     }
 
-    /**
-     * Deciphers the signature and throttling parameters to return a playable stream URL.
-     * @param format The AdaptiveFormat containing the signatureCipher.
-     * @param videoId The ID of the video to process.
-     * @return A Result containing the playable URL or an exception.
-     */
-    fun getStreamUrl(format: PlayerResponse.StreamingData.AdaptiveFormat, videoId: String): Result<String> =
+    suspend fun getAudioStreamUrl(videoId: String): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val url = format.url ?: format.signatureCipher?.let { signatureCipher ->
-                val params = parseQueryString(signatureCipher)
-                val obfuscatedSignature = params["s"] ?: throw ParsingException("Could not parse cipher signature")
-                val signatureParam = params["sp"] ?: throw ParsingException("Could not parse cipher signature parameter")
-                val baseUrl = params["url"]?.let { URLBuilder(it) } ?: throw ParsingException("Could not parse cipher url")
+            val streamInfo = StreamInfo.getInfo("https://www.youtube.com/watch?v=$videoId")
 
-                baseUrl.parameters[signatureParam] = YoutubeJavaScriptPlayerManager.deobfuscateSignature(videoId, obfuscatedSignature)
-                baseUrl.toString()
-            } ?: throw ParsingException("Could not find format url")
+            val bestAudioStream = streamInfo.audioStreams
+                .maxByOrNull { it.bitrate }
 
-            return@runCatching YoutubeJavaScriptPlayerManager.getUrlWithThrottlingParameterDeobfuscated(videoId, url)
+            bestAudioStream?.url ?: throw Exception("Could not find a playable stream URL for video ID: $videoId")
         }
-            .onFailure { error ->
-                error.printStackTrace()
-            }
+    }
 }

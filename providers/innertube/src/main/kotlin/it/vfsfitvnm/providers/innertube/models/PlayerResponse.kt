@@ -3,7 +3,6 @@ package it.vfsfitvnm.providers.innertube.models
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
-import io.ktor.http.parseQueryString
 import it.vfsfitvnm.providers.innertube.NewPipeManager
 
 @Serializable
@@ -43,7 +42,6 @@ data class PlayerResponse(
             internal val loudnessDb: Double?,
             internal val perceptualLoudnessDb: Double?
         ) {
-            // For music clients only
             val normalizedLoudnessDb: Float?
                 get() = (loudnessDb ?: perceptualLoudnessDb?.plus(7))?.plus(7)?.toFloat()
         }
@@ -76,26 +74,17 @@ data class PlayerResponse(
             val url: String?,
             val signatureCipher: String?
         ) {
-            fun findUrl(context: Context): String? {
-
+            // FIX: This function is now a 'suspend' function and takes the videoId directly.
+            // It uses the new NewPipeManager to get the URL correctly.
+            suspend fun findUrl(videoId: String): String? {
+                // If the URL is already provided, return it directly.
                 if (url != null) {
                     return url
                 }
 
-                if (signatureCipher != null) {
-                    val videoId = parseQueryString(signatureCipher)["url"]
-                        ?.let { urlString -> parseQueryString(urlString)["v"] }
-
-                    if (videoId == null) {
-                        return null
-                    }
-
-                    val streamUrl = NewPipeManager.getStreamUrl(format = this, videoId = videoId).getOrNull()
-
-                    return streamUrl
-                }
-
-                return null
+                // Otherwise, use the videoId to get the stream URL from our working NewPipeManager.
+                // .getOrNull() will return the URL on success or null on failure.
+                return NewPipeManager.getAudioStreamUrl(videoId).getOrNull()
             }
         }
     }
