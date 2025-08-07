@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -43,7 +44,14 @@ import it.vfsfitvnm.vimusic.ui.components.themed.Header
 import it.vfsfitvnm.vimusic.ui.components.themed.NumberFieldDialog
 import it.vfsfitvnm.vimusic.ui.components.themed.Scaffold
 import it.vfsfitvnm.vimusic.ui.components.themed.Slider
-import it.vfsfitvnm.vimusic.ui.components.themed.Switch
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import it.vfsfitvnm.vimusic.ui.components.themed.ValueSelectorDialog
 import it.vfsfitvnm.vimusic.ui.screens.GlobalRoutes
 import it.vfsfitvnm.vimusic.ui.screens.Route
@@ -172,7 +180,38 @@ fun SwitchSettingsEntry(
     isEnabled = isEnabled,
     usePadding = usePadding
 ) {
-    Switch(isChecked = isChecked)
+    // 1. Get the dynamic color palette from your app's theme
+    val (colorPalette) = LocalAppearance.current
+
+    Switch(
+        checked = isChecked,
+        onCheckedChange = null,
+        thumbContent = {
+            if (isChecked) {
+                Icon(
+                    imageVector = Icons.Filled.Check,
+                    contentDescription = "Checked",
+                    modifier = Modifier.size(SwitchDefaults.IconSize),
+                    tint = colorPalette.accent
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Unchecked",
+                    modifier = Modifier.size(SwitchDefaults.IconSize),
+                    tint = colorPalette.background0
+                )
+            }
+        },
+        colors = SwitchDefaults.colors(
+            // "On" state colors
+            checkedTrackColor = colorPalette.accent,
+            checkedThumbColor = colorPalette.background0,
+            // "Off" state colors
+            uncheckedTrackColor = colorPalette.background1,
+            uncheckedThumbColor = colorPalette.textSecondary,
+        )
+    )
 }
 
 @Composable
