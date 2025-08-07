@@ -121,6 +121,49 @@ import kotlin.time.Duration.Companion.seconds
 private const val UPDATE_DELAY = 50L
 private val wordSyncCache = mutableMapOf<String, LyricsPlusSyncManager>()
 
+// Helper function to check if text is word-level JSON
+private fun isWordLevelJson(text: String?): Boolean {
+    if (text.isNullOrBlank()) return false
+    val trimmed = text.trim()
+    return trimmed.startsWith("[") && trimmed.endsWith("]") &&
+        trimmed.length > 10 && // More robust check
+        !trimmed.contains('\n') &&
+        trimmed.contains("words") // Additional check for word-level structure
+}
+
+// Helper function to check for LRC format to prevent flicker
+private fun isLrcFormat(text: String?): Boolean {
+    if (text.isNullOrBlank()) return false
+    // A simple but effective heuristic: check for the presence of a timestamp tag.
+    return text.contains(Regex("\\[\\d{2}:\\d{2}[.:]\\d{2,3}\\]"))
+}
+
+// Helper function to safely parse word-level lyrics
+private fun parseWordLevelLyrics(jsonText: String): List<LyricLine>? {
+    return try {
+        val parsed = Json.decodeFromString<List<LyricLine>>(jsonText)
+        // Validate it has actual word data
+        if (parsed.any { it.words.isNotEmpty() }) parsed else null
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
+// Check cached word-level lyrics first
+private fun getCachedWordLevelLyrics(context: android.content.Context, mediaId: String): List<LyricLine>? {
+    return try {
+        val cacheFile = File(File(context.cacheDir, "lyrics"), "${mediaId}_word.json")
+        if (cacheFile.exists()) {
+            val jsonText = cacheFile.readText()
+            parseWordLevelLyrics(jsonText)
+        } else null
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+
 @Composable
 fun Lyrics(
     mediaId: String,
@@ -159,17 +202,52 @@ fun Lyrics(
 
     var lyrics by remember { mutableStateOf<Lyrics?>(null) }
 
+    // Priority: Word-level > Line-level > Unsync
     val showSynchronizedLyrics = remember(shouldShowSynchronizedLyrics, lyrics) {
-        shouldShowSynchronizedLyrics && lyrics?.synced?.isBlank() != true
+        shouldShowSynchronizedLyrics && (
+            isWordLevelJson(lyrics?.synced) ||
+                isWordLevelJson(lyrics?.fixed) ||
+                (!lyrics?.synced.isNullOrBlank() && !isWordLevelJson(lyrics?.synced))
+            )
     }
 
     var editing by remember(mediaId, shouldShowSynchronizedLyrics) { mutableStateOf(false) }
     var picking by remember(mediaId, shouldShowSynchronizedLyrics) { mutableStateOf(false) }
     var error by remember(mediaId, shouldShowSynchronizedLyrics) { mutableStateOf(false) }
 
+    // Get text with proper priority: word-level first, then line-level, then fixed
     val text = remember(lyrics, showSynchronizedLyrics) {
-        if (showSynchronizedLyrics) lyrics?.synced else lyrics?.fixed
+        when {
+            showSynchronizedLyrics -> {
+                // Priority 1: Word-level JSON in synced
+                val syncedText = lyrics?.synced
+                if (isWordLevelJson(syncedText)) {
+                    syncedText
+                } else {
+                    // Priority 2: Word-level JSON in fixed
+                    val fixedText = lyrics?.fixed
+                    if (isWordLevelJson(fixedText)) {
+                        fixedText
+                    } else {
+                        // Priority 3: Line-level LRC in synced
+                        if (!syncedText.isNullOrBlank()) syncedText else null
+                    }
+                }
+            }
+            else -> {
+                // For unsynchronized mode, prefer non-JSON fixed text
+                val fixedText = lyrics?.fixed
+                if (!isWordLevelJson(fixedText) && !fixedText.isNullOrBlank()) {
+                    fixedText
+                } else {
+                    // Fallback to synced if it's not JSON
+                    val syncedText = lyrics?.synced
+                    if (!isWordLevelJson(syncedText)) syncedText else null
+                }
+            }
+        }
     }
+
     var invalidLrc by remember(text) { mutableStateOf(false) }
 
     var wordSyncedManager by rememberSaveable(mediaId, shouldShowSynchronizedLyrics) {
@@ -187,162 +265,234 @@ fun Lyrics(
         }
     }
 
-    LaunchedEffect(mediaId, shouldShowSynchronizedLyrics, binder?.player?.isPlaying) {
+    // Only trigger on mediaId change, not on player state changes
+    LaunchedEffect(mediaId, shouldUpdateLyrics) {
         runCatching {
             withContext(Dispatchers.IO) {
-                Database.instance
-                    .lyrics(mediaId)
-                    .distinctUntilChanged()
-                    .cancellable()
-                    .collect { currentLyrics ->
-                        // Reset state for each new emission
-                        wordSyncedManager = null
-                        wordSyncedAvailable = false
+                // Reset state
+                wordSyncedManager = null
+                wordSyncedAvailable = false
 
-                        if (!shouldUpdateLyrics || (currentLyrics?.fixed != null && currentLyrics.synced != null)) {
-                            lyrics = currentLyrics
+                // Check cached word-level lyrics first
+                val cachedWordLyrics = getCachedWordLevelLyrics(context, mediaId)
+                if (cachedWordLyrics != null) {
+                    wordSyncedAvailable = true
+                    val manager = LyricsPlusSyncManager(
+                        lyrics = cachedWordLyrics,
+                        positionProvider = { binder?.player?.currentPosition ?: 0L }
+                    )
+                    wordSyncCache[mediaId] = manager
+                    wordSyncedManager = manager
 
-                            val syncedText = currentLyrics?.synced
-                            // THE FIX: Check for a JSON array `[` instead of an object `{`
-                            val isWordSyncedJson = syncedText?.trim()?.startsWith("[") == true && syncedText.trim().endsWith("]")
-
-                            if (isWordSyncedJson) {
-                                val cachedWordLevelLyrics = try {
-                                    Json.decodeFromString<List<LyricLine>>(syncedText!!)
-                                } catch (e: Exception) {
-                                    null
+                    // Save to database if not exists
+                    val jsonString = Json.encodeToString(cachedWordLyrics)
+                    Database.instance.lyrics(mediaId).distinctUntilChanged().cancellable().collect { currentLyrics ->
+                        if (currentLyrics?.synced != jsonString) {
+                            val newLyrics = Lyrics(
+                                songId = mediaId,
+                                fixed = currentLyrics?.fixed,
+                                synced = jsonString
+                            )
+                            ensureActive()
+                            transaction {
+                                runCatching {
+                                    currentEnsureSongInserted()
+                                    Database.instance.upsert(newLyrics)
                                 }
+                            }
+                            lyrics = newLyrics
+                        } else {
+                            lyrics = currentLyrics
+                        }
+                        return@collect
+                    }
+                } else {
+                    // Check database
+                    Database.instance
+                        .lyrics(mediaId)
+                        .distinctUntilChanged()
+                        .cancellable()
+                        .collect { currentLyrics ->
 
-                                if (cachedWordLevelLyrics != null) {
+                            // Check if we have word-level in database
+                            val wordLevelText = when {
+                                isWordLevelJson(currentLyrics?.synced) -> currentLyrics?.synced
+                                isWordLevelJson(currentLyrics?.fixed) -> currentLyrics?.fixed
+                                else -> null
+                            }
+
+                            if (wordLevelText != null) {
+                                val parsedWordLyrics = parseWordLevelLyrics(wordLevelText)
+                                if (parsedWordLyrics != null) {
                                     wordSyncedAvailable = true
                                     val manager = LyricsPlusSyncManager(
-                                        lyrics = cachedWordLevelLyrics,
+                                        lyrics = parsedWordLyrics,
                                         positionProvider = { binder?.player?.currentPosition ?: 0L }
                                     )
                                     wordSyncCache[mediaId] = manager
                                     wordSyncedManager = manager
+                                    lyrics = currentLyrics
+                                    return@collect
                                 }
                             }
-                        } else {
-                            val mediaMetadata = currentMediaMetadataProvider()
-                            var duration = withContext(Dispatchers.Main) {
-                                currentDurationProvider()
-                            }
-                            while (duration == C.TIME_UNSET) {
-                                delay(100)
-                                duration = withContext(Dispatchers.Main) {
+
+                            // Check if we have sufficient lyrics and don't need to fetch
+                            val hasFixedLyrics = !currentLyrics?.fixed.isNullOrBlank()
+                            val hasSyncedLyrics = !currentLyrics?.synced.isNullOrBlank()
+
+                            if (!shouldUpdateLyrics || (hasFixedLyrics && hasSyncedLyrics)) {
+                                lyrics = currentLyrics
+                            } else {
+                                // Need to fetch lyrics
+                                val mediaMetadata = currentMediaMetadataProvider()
+                                var duration = withContext(Dispatchers.Main) {
                                     currentDurationProvider()
                                 }
-                            }
-                            val album = mediaMetadata.albumTitle?.toString()
-                            val artist = mediaMetadata.artist?.toString().orEmpty()
-                            val title = mediaMetadata.title?.toString().orEmpty().let {
-                                if (mediaId.startsWith(LOCAL_KEY_PREFIX)) {
-                                    it.substringBeforeLast('.').trim()
-                                } else it
-                            }
+                                while (duration == C.TIME_UNSET) {
+                                    delay(100)
+                                    duration = withContext(Dispatchers.Main) {
+                                        currentDurationProvider()
+                                    }
+                                }
+                                val album = mediaMetadata.albumTitle?.toString()
+                                val artist = mediaMetadata.artist?.toString().orEmpty()
+                                val title = mediaMetadata.title?.toString().orEmpty().let {
+                                    if (mediaId.startsWith(LOCAL_KEY_PREFIX)) {
+                                        it.substringBeforeLast('.').trim()
+                                    } else it
+                                }
 
-                            lyrics = null
-                            error = false
+                                lyrics = null
+                                error = false
 
-                            val wordLevelLyrics = LyricsPlus.fetchLyrics(
-                                baseUrl = BuildConfig.LYRICS_API_BASE,
-                                title = title,
-                                artist = artist,
-                                album = album,
-                                duration = duration.toInt()
-                            )
-
-                            val hasActualWords = wordLevelLyrics?.any { it.words.isNotEmpty() } == true
-
-                            if (hasActualWords) {
-                                wordSyncedAvailable = true
-                                val nonNullWordLevelLyrics = wordLevelLyrics!!
-
-                                val jsonString = try {
-                                    Json.encodeToString(nonNullWordLevelLyrics)
+                                // Try word-level first
+                                val wordLevelLyrics = try {
+                                    LyricsPlus.fetchLyrics(
+                                        baseUrl = BuildConfig.LYRICS_API_BASE,
+                                        title = title,
+                                        artist = artist,
+                                        album = album,
+                                        duration = duration.toInt()
+                                    )
                                 } catch (e: Exception) {
                                     e.printStackTrace()
                                     null
                                 }
 
-                                if (jsonString != null) {
-                                    LyricsCacheManager.save(context, mediaId, jsonString)
+                                val hasActualWords = wordLevelLyrics?.any { it.words.isNotEmpty() } == true
 
-                                    Lyrics(
-                                        songId = mediaId,
-                                        fixed = jsonString, // Save JSON to both fields
-                                        synced = jsonString
-                                    ).also {
+                                if (hasActualWords) {
+                                    // Got word-level lyrics
+                                    wordSyncedAvailable = true
+                                    val nonNullWordLevelLyrics = wordLevelLyrics!!
+
+                                    val jsonString = try {
+                                        Json.encodeToString(nonNullWordLevelLyrics)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        null
+                                    }
+
+                                    if (jsonString != null) {
+                                        // Cache the word-level lyrics
+                                        LyricsCacheManager.save(context, mediaId, jsonString)
+
+                                        // Save word-level to synced field
+                                        val newLyrics = Lyrics(
+                                            songId = mediaId,
+                                            fixed = currentLyrics?.fixed,
+                                            synced = jsonString
+                                        )
+
                                         ensureActive()
                                         transaction {
                                             runCatching {
                                                 currentEnsureSongInserted()
-                                                Database.instance.upsert(it)
+                                                Database.instance.upsert(newLyrics)
                                             }
                                         }
+
+                                        val manager = LyricsPlusSyncManager(
+                                            lyrics = nonNullWordLevelLyrics,
+                                            positionProvider = { binder?.player?.currentPosition ?: 0L }
+                                        )
+                                        wordSyncCache[mediaId] = manager
+                                        wordSyncedManager = manager
                                     }
-                                }
+                                } else {
+                                    // Fallback to line-level lyrics
+                                    wordSyncedAvailable = false
 
-                                val manager = LyricsPlusSyncManager(
-                                    lyrics = nonNullWordLevelLyrics,
-                                    positionProvider = { binder?.player?.currentPosition ?: 0L }
-                                )
-                                wordSyncCache[mediaId] = manager
-                                wordSyncedManager = manager
-                            } else {
-                                wordSyncedAvailable = false
-                                val fixed = currentLyrics?.fixed ?: Innertube
-                                    .lyrics(NextBody(videoId = mediaId))
-                                    ?.getOrNull()
-                                ?: LrcLib.bestLyrics(
-                                    artist = artist,
-                                    title = title,
-                                    duration = duration.milliseconds,
-                                    album = album,
-                                    synced = false
-                                )?.map { it?.text }?.getOrNull()
+                                    val fixed = currentLyrics?.fixed ?: try {
+                                        Innertube.lyrics(NextBody(videoId = mediaId))?.getOrNull()
+                                            ?: LrcLib.bestLyrics(
+                                                artist = artist,
+                                                title = title,
+                                                duration = duration.milliseconds,
+                                                album = album,
+                                                synced = false
+                                            )?.map { it?.text }?.getOrNull()
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        null
+                                    }
 
-                                val synced = currentLyrics?.synced ?: LrcLib.bestLyrics(
-                                    artist = artist,
-                                    title = title,
-                                    duration = duration.milliseconds,
-                                    album = album
-                                )?.map { it?.text }?.getOrNull()
-                                ?: LrcLib.bestLyrics(
-                                    artist = artist,
-                                    title = title.split("(")[0].trim(),
-                                    duration = duration.milliseconds,
-                                    album = album
-                                )?.map { it?.text }?.getOrNull()
-                                ?: KuGou.lyrics(
-                                    artist = artist,
-                                    title = title,
-                                    duration = duration / 1000
-                                )?.map { it?.value }?.getOrNull()
+                                    val synced = currentLyrics?.synced ?: try {
+                                        LrcLib.bestLyrics(
+                                            artist = artist,
+                                            title = title,
+                                            duration = duration.milliseconds,
+                                            album = album
+                                        )?.map { it?.text }?.getOrNull()
+                                            ?: LrcLib.bestLyrics(
+                                                artist = artist,
+                                                title = title.split("(")[0].trim(),
+                                                duration = duration.milliseconds,
+                                                album = album
+                                            )?.map { it?.text }?.getOrNull()
+                                            ?: KuGou.lyrics(
+                                                artist = artist,
+                                                title = title,
+                                                duration = duration / 1000
+                                            )?.map { it?.value }?.getOrNull()
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        null
+                                    }
 
-                                Lyrics(
-                                    songId = mediaId,
-                                    fixed = fixed.orEmpty(),
-                                    synced = synced.orEmpty()
-                                ).also {
+                                    val newLyrics = Lyrics(
+                                        songId = mediaId,
+                                        fixed = fixed.orEmpty(),
+                                        synced = synced.orEmpty()
+                                    )
+
                                     ensureActive()
                                     transaction {
                                         runCatching {
                                             currentEnsureSongInserted()
-                                            Database.instance.upsert(it)
+                                            Database.instance.upsert(newLyrics)
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        error = if (shouldShowSynchronizedLyrics) {
-                            !wordSyncedAvailable && lyrics?.synced?.isBlank() == true
-                        } else {
-                            lyrics?.fixed?.isBlank() == true
+                            // Update error state based on priority
+                            error = when {
+                                shouldShowSynchronizedLyrics -> {
+                                    !wordSyncedAvailable &&
+                                        !isWordLevelJson(lyrics?.synced) &&
+                                        !isWordLevelJson(lyrics?.fixed) &&
+                                        lyrics?.synced.isNullOrBlank()
+                                }
+                                else -> {
+                                    val fixedText = lyrics?.fixed
+                                    val syncedText = lyrics?.synced
+                                    (isWordLevelJson(fixedText) || fixedText.isNullOrBlank()) &&
+                                        (isWordLevelJson(syncedText) || syncedText.isNullOrBlank())
+                                }
+                            }
                         }
-                    }
+                }
             }
         }.exceptionOrNull()?.let {
             if (it is CancellationException) throw it
@@ -465,12 +615,11 @@ fun Lyrics(
         }
 
         val lyricsState = rememberSaveable(text) {
-            val syncedText = lyrics?.synced?.takeIf { it.isNotBlank() }
-            // THE FIX: Check for a JSON array `[` instead of an object `{`
-            val isJson = syncedText?.trim()?.startsWith("[") == true && syncedText.trim().endsWith("]")
+            val syncedText = text?.takeIf { it.isNotBlank() }
+            val isJson = isWordLevelJson(syncedText)
 
             if (isJson) {
-                // If it's our JSON, we don't use the LRC parser, so we provide a default state.
+                // If it's word-level JSON, provide default state
                 SynchronizedLyricsState(sentences = null, offset = 0L)
             } else {
                 val file = syncedText?.let { LrcParser.parse(it)?.toLrcFile() }
@@ -482,7 +631,7 @@ fun Lyrics(
         }
 
         val synchronizedLyrics = remember(lyricsState) {
-            invalidLrc = lyricsState.sentences == null
+            invalidLrc = lyricsState.sentences == null && !isWordLevelJson(text)
             lyricsState.sentences?.let {
                 SynchronizedLyrics(it.toImmutableMap()) {
                     binder?.player?.let { player ->
@@ -499,6 +648,7 @@ fun Lyrics(
             label = ""
         ) { synchronized ->
             when {
+                // Case 1: Word-level sync is available and requested
                 synchronized && wordSyncedAvailable && wordSyncedManager != null -> {
                     LaunchedEffect(Unit) {
                         while (isActive) {
@@ -510,11 +660,12 @@ fun Lyrics(
                     WordSyncedLyrics(manager = wordSyncedManager!!)
                 }
 
-                synchronized -> {
+                // Case 2: Line-level sync is parsed and ready
+                synchronized && synchronizedLyrics != null -> {
                     val lazyListState = rememberLazyListState()
 
                     LaunchedEffect(synchronizedLyrics, density, animatedHeight) {
-                        val currentSynchronizedLyrics = synchronizedLyrics ?: return@LaunchedEffect
+                        val currentSynchronizedLyrics = synchronizedLyrics
                         val centerOffset = with(density) { (-animatedHeight / 3).roundToPx() }
 
                         lazyListState.animateScrollToItem(
@@ -533,7 +684,7 @@ fun Lyrics(
                         }
                     }
 
-                    if (synchronizedLyrics != null) LazyColumn(
+                    LazyColumn(
                         state = lazyListState,
                         userScrollEnabled = false,
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -578,11 +729,15 @@ fun Lyrics(
                     }
                 }
 
-                else -> {
-                    // THE FIX: Check for a JSON array `[` instead of an object `{`
-                    val isJson = lyrics?.fixed?.trim()?.startsWith("[") == true && lyrics?.fixed?.trim()?.endsWith("]") == true
-                    // In the non-synced view, don't show the raw JSON.
-                    val displayText = if(isJson) "" else lyrics?.fixed.orEmpty()
+                // Case 3: Unsynchronized mode is explicitly selected
+                !synchronized -> {
+                    // Unsynchronized mode - show non-JSON text.
+                    // We add isLrcFormat check as a final safeguard against flicker.
+                    val displayText = if (!isWordLevelJson(text) && !isLrcFormat(text) && !text.isNullOrBlank()) {
+                        text
+                    } else {
+                        "" // Do not show anything if it's JSON or LRC format
+                    }
 
                     BasicText(
                         text = displayText,
@@ -696,20 +851,21 @@ fun Lyrics(
                                                 File(File(context.cacheDir, "lyrics"), "${mediaId}_word.json").delete()
                                             } catch (e: Exception) { e.printStackTrace() }
 
+                                            // Clear word sync cache
+                                            wordSyncCache.remove(mediaId)
+                                            wordSyncedManager = null
+                                            wordSyncedAvailable = false
 
                                             transaction {
                                                 runCatching {
                                                     currentEnsureSongInserted()
 
+                                                    // Clear both fixed and synced to force refetch
                                                     Database.instance.upsert(
-                                                        if (shouldShowSynchronizedLyrics) Lyrics(
-                                                            songId = mediaId,
-                                                            fixed = lyrics?.fixed,
-                                                            synced = null
-                                                        ) else Lyrics(
+                                                        Lyrics(
                                                             songId = mediaId,
                                                             fixed = null,
-                                                            synced = lyrics?.synced
+                                                            synced = null
                                                         )
                                                     )
                                                 }
