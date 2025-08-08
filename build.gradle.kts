@@ -19,7 +19,7 @@ val clean by tasks.registering(Delete::class) {
 
 allprojects {
     group = "it.vfsfitvnm.vimusic"
-    version = "0.1.1"
+    version = "0.1.2"
 
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
