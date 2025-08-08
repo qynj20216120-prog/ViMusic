@@ -174,7 +174,7 @@
     <string name="color_mode_light">Claro</string>
     <string name="color_mode_dark">Escuro</string>
     <string name="color_mode_system">Sistema</string>
-    <string name="thumbnail_roundness">miniatura arredondada</string>
+    <string name="thumbnail_roundness">Miniatura arredondada</string>
     <string name="none">Nenhum</string>
     <string name="thumbnail_roundness_light">Claro</string>
     <string name="thumbnail_roundness_medium">Médio</string>
@@ -217,7 +217,7 @@
     <string name="song_cache">Cache de músicas</string>
     <string name="pause_song_cache">Pausar cache</string>
     <string name="pause_song_cache_description">Pausa temporariamente a adição de novas músicas à cache</string>
-    <string name="database">Banco de dados</string>
+    <string name="database">Base de dados</string>
     <string name="cleanup">Limpeza</string>
     <string name="pause_playback_history">Faz uma pausa no histórico de reprodução</string>
     <string name="pause_playback_history_description">Interrompe a utilização de eventos de reprodução para escolhas rápidas</string>
@@ -225,7 +225,7 @@
     <string name="reset_quick_picks">Redefinir escolhas rápidas</string>
     <string name="quick_picks_empty">As escolhas rápidas são apagadas</string>
     <string name="pause_playback_time">Pausa o tempo de reprodução</string>
-    <string name="format_pause_playback_time_description">Impede que o tempo de reprodução seja guardado. Isto pausa as estatísticas na playlist "Os meus %1$s Favoritos"!</string>
+    <string name="format_pause_playback_time_description">Impede que o tempo de reprodução seja guardado. Isto pausa as estatísticas na playlist \"Os meus %1$s Favoritos\"!</string>
     <string name="backup">Backup</string>
     <string name="backup_description">As preferências pessoais (por exemplo, o modo de tema) e a cache são eliminadas</string>
     <string name="backup_action_description">Exportar a base de dados para o armazenamento externo</string>
@@ -235,7 +235,7 @@
     <string name="other">Outros</string>
     <string name="android_auto">Android Auto</string>
     <string name="android_auto_description">Ativar o suporte Android Auto</string>
-    <string name="android_auto_warning">Lembre-se de ativar "Fontes Desconhecidas" nas Definições de Programador do Android Auto</string>
+    <string name="android_auto_warning">Lembre-se de ativar \"Fontes Desconhecidas\" nas Definições de Programador do Android Auto</string>
     <string name="search_history">Histórico de pesquisa</string>
     <string name="pause_search_history">Pausar o histórico de pesquisa</string>
     <string name="pause_search_history_description">Não guardar novas consultas pesquisadas nem apresentar o histórico</string>
@@ -289,8 +289,8 @@
     <string name="bass_boost_description">Reforça as frequências baixas para melhorar a experiência auditiva</string>
     <string name="bass_boost_level">Nível de reforço de graves</string>
     <string name="bass_boost_level_description">Nível (0–1000) de reforço de frequências baixas; use por sua conta e risco!</string>
-    <string name="sponsor_block">Sponsorblock</string>
-    <string name="sponsor_block_description">Bloqueia conteúdo patrocinado/offtopic utilizando dados da API do Sponsorblock</string>
+    <string name="sponsor_block">Bloqueador de anúncios</string>
+    <string name="sponsor_block_description">Bloqueia conteúdo patrocinado/offtopic utilizando dados da API do Bloqueador de anúncios</string>
     <string name="reverb">Reverberação</string>
     <string name="audio_focus">Foco no áudio</string>
     <string name="audio_focus_description">Se o leitor deve solicitar foco de áudio (media) em todo o sistema</string>
@@ -350,7 +350,7 @@
     <string name="dynamic_thumbnails">Miniaturas dinâmicas</string>
     <string name="max_dynamic_thumbnail_size">Tamanho máximo de miniatura dinâmica</string>
     <string name="max_dynamic_thumbnail_size_description">Tamanho máximo de uma miniatura quando é utilizada uma miniatura dinâmica</string>
-    <string name="hourly">Por hora</string>
+    <string name="hourly">Horariamente</string>
     <string name="daily">Diariamente</string>
     <string name="weekly">Semanalmente</string>
     <string name="version_check">Verificar atualizações automaticamente</string>
@@ -371,7 +371,7 @@
     <string name="dialog_ok">OK</string>
     <string name="next">Próximo</string>
     <string name="map_csv_columns">Mapear colunas CSV</string>
-    <string name="song_title_column">Coluna Título da canção</string>
+    <string name="song_title_column">Coluna Título da música</string>
     <string name="artist_name_column">Coluna Nome do artista</string>
     <string name="name_your_playlist_title">Nomeie a sua nova playlist</string>
     <string name="playlist_name_hint">Nome da playlist</string>
