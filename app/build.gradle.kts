@@ -180,6 +180,7 @@ dependencies {
     implementation(libs.log4j)
     implementation(libs.slf4j)
     implementation(libs.logback)
+    implementation(libs.material)
 
     implementation(projects.providers.common)
     implementation(projects.providers.github)

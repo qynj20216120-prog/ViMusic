@@ -8,6 +8,7 @@ jvm = "23"
 agp = "8.11.1"
 
 loggingInterceptor = "5.1.0"
+material = "1.8.3"
 room = "2.7.2"
 media3 = "1.7.1"
 ktor = "3.2.2"
@@ -54,6 +55,7 @@ coil_ktor = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coi
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "loggingInterceptor" }
+material = { module = "androidx.compose.material:material", version.ref = "material" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "converterGson" }
 room = { module = "androidx.room:room-ktx", version.ref = "room" }
 room_compiler = { module = "androidx.room:room-compiler", version.ref = "room" }

@@ -1,15 +1,52 @@
+@file:Suppress("DEPRECATION")
+
 package it.vfsfitvnm.vimusic.ui.screens.searchresult
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.FractionalThreshold
+import androidx.compose.material.rememberSwipeableState
+import androidx.compose.material.swipeable
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import it.vfsfitvnm.compose.persist.LocalPersistMap
+import it.vfsfitvnm.compose.persist.PersistMapCleanup
+import it.vfsfitvnm.compose.routing.RouteHandler
+import it.vfsfitvnm.core.ui.Dimensions
+import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.providers.innertube.Innertube
+import it.vfsfitvnm.providers.innertube.models.bodies.ContinuationBody
+import it.vfsfitvnm.providers.innertube.models.bodies.SearchBody
+import it.vfsfitvnm.providers.innertube.requests.searchPage
+import it.vfsfitvnm.providers.innertube.utils.from
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.preferences.UIStatePreferences
@@ -32,26 +69,24 @@ import it.vfsfitvnm.vimusic.ui.screens.Route
 import it.vfsfitvnm.vimusic.ui.screens.albumRoute
 import it.vfsfitvnm.vimusic.ui.screens.artistRoute
 import it.vfsfitvnm.vimusic.ui.screens.playlistRoute
+import it.vfsfitvnm.vimusic.utils.addNext
 import it.vfsfitvnm.vimusic.utils.asMediaItem
 import it.vfsfitvnm.vimusic.utils.forcePlay
 import it.vfsfitvnm.vimusic.utils.playingSong
-import it.vfsfitvnm.compose.persist.LocalPersistMap
-import it.vfsfitvnm.compose.persist.PersistMapCleanup
-import it.vfsfitvnm.compose.routing.RouteHandler
-import it.vfsfitvnm.core.ui.Dimensions
-import it.vfsfitvnm.providers.innertube.Innertube
-import it.vfsfitvnm.providers.innertube.models.bodies.ContinuationBody
-import it.vfsfitvnm.providers.innertube.models.bodies.SearchBody
-import it.vfsfitvnm.providers.innertube.requests.searchPage
-import it.vfsfitvnm.providers.innertube.utils.from
 
-@OptIn(ExperimentalFoundationApi::class)
+private enum class SwipeState {
+    Covered,
+    Revealed
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterialApi::class)
 @Route
 @Composable
 fun SearchResultScreen(query: String, onSearchAgain: () -> Unit) {
     val persistMap = LocalPersistMap.current
     val binder = LocalPlayerServiceBinder.current
     val menuState = LocalMenuState.current
+    val (colorPalette) = LocalAppearance.current
 
     val saveableStateHolder = rememberSaveableStateHolder()
 
@@ -108,26 +143,103 @@ fun SearchResultScreen(query: String, onSearchAgain: () -> Unit) {
                             emptyItemsText = stringResource(R.string.no_search_results),
                             header = headerContent,
                             itemContent = { song ->
-                                SongItem(
-                                    song = song,
-                                    thumbnailSize = Dimensions.thumbnails.song,
-                                    modifier = Modifier.combinedClickable(
-                                        onLongClick = {
-                                            menuState.display {
-                                                NonQueuedMediaItemMenu(
-                                                    onDismiss = menuState::hide,
-                                                    mediaItem = song.asMediaItem
-                                                )
-                                            }
-                                        },
-                                        onClick = {
-                                            binder?.stopRadio()
-                                            binder?.player?.forcePlay(song.asMediaItem)
-                                            binder?.setupRadio(song.info?.endpoint)
-                                        }
-                                    ),
-                                    isPlaying = playing && currentMediaId == song.key
+                                val swipeableState = rememberSwipeableState(initialValue = SwipeState.Covered)
+                                val hapticFeedback = LocalHapticFeedback.current
+                                val density = LocalDensity.current
+
+                                val resistanceThreshold = 48.dp
+                                val resistanceThresholdPx = with(density) { resistanceThreshold.toPx() }
+                                val maxStretchFactor = 0.075f
+
+                                val revealWidth = 96.dp
+                                val anchors = mapOf(
+                                    0f to SwipeState.Covered,
+                                    // The total distance includes the resistance zone
+                                    (resistanceThresholdPx + with(density) { revealWidth.toPx() }) to SwipeState.Revealed
                                 )
+
+                                var isResistanceBroken by rememberSaveable { mutableStateOf(false) }
+
+                                LaunchedEffect(Unit) {
+                                    snapshotFlow { swipeableState.offset.value }.collect { offset ->
+                                        if (offset >= resistanceThresholdPx && !isResistanceBroken) {
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            isResistanceBroken = true
+                                        } else if (offset == 0f) {
+                                            isResistanceBroken = false
+                                        }
+                                    }
+                                }
+
+                                LaunchedEffect(swipeableState.currentValue) {
+                                    if (swipeableState.currentValue == SwipeState.Revealed) {
+                                        binder?.player?.addNext(song.asMediaItem)
+                                        swipeableState.animateTo(SwipeState.Covered)
+                                    }
+                                }
+
+                                val rawOffset = swipeableState.offset.value
+                                val (visualOffset, scaleX) = if (rawOffset < resistanceThresholdPx) {
+                                    val stretchProgress = rawOffset / resistanceThresholdPx
+                                    val scale = 1f + (stretchProgress * maxStretchFactor)
+                                    0f to scale
+                                } else {
+                                    val offset = rawOffset - resistanceThresholdPx
+                                    offset to 1f
+                                }
+
+                                Box {
+                                    // Background content (Action Icon)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .width(revealWidth)
+                                            .background(colorPalette.background0)
+                                            .align(Alignment.CenterStart),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Image(
+                                            painter = painterResource(R.drawable.play_skip_forward),
+                                            contentDescription = null,
+                                            colorFilter = ColorFilter.tint(colorPalette.accent),
+                                            modifier = Modifier.padding(start = 24.dp)
+                                        )
+                                    }
+
+                                    // Foreground content (Song Item)
+                                    SongItem(
+                                        song = song,
+                                        thumbnailSize = Dimensions.thumbnails.song,
+                                        modifier = Modifier
+                                            .graphicsLayer {
+                                                transformOrigin = TransformOrigin(0f, 0.5f)
+                                                this.scaleX = scaleX
+                                                translationX = visualOffset
+                                            }
+                                            .swipeable(
+                                                state = swipeableState,
+                                                anchors = anchors,
+                                                thresholds = { _, _ -> FractionalThreshold(0.5f) },
+                                                orientation = Orientation.Horizontal
+                                            )
+                                            .combinedClickable(
+                                                onLongClick = {
+                                                    menuState.display {
+                                                        NonQueuedMediaItemMenu(
+                                                            onDismiss = menuState::hide,
+                                                            mediaItem = song.asMediaItem
+                                                        )
+                                                    }
+                                                },
+                                                onClick = {
+                                                    binder?.stopRadio()
+                                                    binder?.player?.forcePlay(song.asMediaItem)
+                                                    binder?.setupRadio(song.info?.endpoint)
+                                                }
+                                            ),
+                                        isPlaying = playing && currentMediaId == song.key
+                                    )
+                                }
                             },
                             itemPlaceholderContent = {
                                 SongItemPlaceholder(thumbnailSize = Dimensions.thumbnails.song)
