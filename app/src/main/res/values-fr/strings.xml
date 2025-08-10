@@ -116,7 +116,7 @@
     <string name="no_browser_installed">Impossible de trouver une application pour naviguer sur Internet</string>
     <string name="no_equalizer_installed">Impossible de trouver une application pour égaliser l\'audio</string>
     <string name="no_file_chooser_installed">Impossible de trouver une application pour créer des documents</string>
-    <string name="no_battery_optimization_settings_found">Impossible de trouver les paramètres d'optimisation de la batterie, veuillez ajouter ViMusic à la liste blanche manuellement.</string>
+    <string name="no_battery_optimization_settings_found">Impossible de trouver les paramètres d\'optimisation de la batterie, veuillez ajouter ViMusic à la liste blanche manuellement.</string>
     <string name="related_albums">Albums Associés</string>
     <string name="similar_artists">Artistes Similaires</string>
     <string name="recommended_playlists">Playlists que vous pourriez aimer</string>
@@ -281,7 +281,7 @@
     <string name="minimum_silence_length_warning">L\'application doit être redémarrée pour que les modifications soient effectives !</string>
     <string name="restart_service">Redémarrer le service</string>
     <string name="loudness_normalization">Normalisation du niveau sonore</string>
-<string name="loudness_normalization_description">Régler le volume à un niveau fixe</string>
+    <string name="loudness_normalization_description">Régler le volume à un niveau fixe</string>
     <string name="loudness_base_gain">Gain de base du volume sonore</string>
     <string name="loudness_base_gain_description">Le gain « cible » pour la normalisation du volume sonore</string>
     <string name="loudness_normalization_extreme">Valeur de volume sonore extrême détectée (%s). Désactivation de la normalisation pour ce titre</string>
@@ -366,26 +366,26 @@
     <string name="reverb_plate">Plat</string>
     <string name="tabs">Onglets</string>
     <string name="local_import">Importation locale</string>
-    <string name="import_from_csv">Importer à partir d'un fichier CSV</string>
-    <string name="import_from_csv_description">Importez une liste de lecture à partir de n'importe quel fichier CSV en mappant les colonnes.</string>
+    <string name="import_from_csv">Importer à partir d\'un fichier CSV</string>
+    <string name="import_from_csv_description">Importez une liste de lecture à partir de n\'importe quel fichier CSV en mappant les colonnes.</string>
     <string name="dialog_ok">OK</string>
     <string name="next">Suivant</string>
     <string name="map_csv_columns">Carte des colonnes CSV</string>
     <string name="song_title_column">Colonne de titre de chanson</string>
-    <string name="artist_name_column">Colonne Nom de l'artiste</string>
+    <string name="artist_name_column">Colonne Nom de l\'artiste</string>
     <string name="name_your_playlist_title">Nommez votre nouvelle playlist</string>
     <string name="playlist_name_hint">Nom de la playlist</string>
     <string name="create_playlist_button">Créer une playlist</string>
     <string name="import_title_in_progress">Importation de la playlist…</string>
     <string name="import_title_complete">Importation terminée</string>
-    <string name="import_title_failed">Échec de l'importation</string>
+    <string name="import_title_failed">Échec de l\'importation</string>
     <string name="import_title_starting">Départ…</string>
     <string name="import_progress">%1$d titres sur %2$d traités</string>
     <string name="import_complete_summary">Importation réussie de %1$d titres sur %2$d.</string>
     <string name="import_failed_summary">Impossible de trouver %1$d titres.</string>
-    <string name="import_error_message">Une erreur s'est produite : %1$s</string>
-    <string name="import_initializing">Initialisation du processus d'importation…</string>
-    <string name="unknown_error">Une erreur inconnue s'est produite</string>
+    <string name="import_error_message">Une erreur s\'est produite : %1$s</string>
+    <string name="import_initializing">Initialisation du processus d\'importation…</string>
+    <string name="unknown_error">Une erreur inconnue s\'est produite</string>
     <string name="piped_learn_more_url" translatable="false">https://github.com/TeamPiped/Piped/blob/master/README.md</string>
     <string name="lyrics_cache">Cache des paroles</string>
     <plurals name="format_reset_blacklist_description">
@@ -393,7 +393,7 @@
         <item quantity="other">Supprimer tous les titres %1$s de la liste noire</item>
     </plurals>
     <plurals name="format_reset_quick_picks_amount">
-        <item quantity="one">Supprimer l'événement de lecture %1$s</item>
+        <item quantity="one">Supprimer l\'événement de lecture %1$s</item>
         <item quantity="other">Supprimer %1$s événements de lecture</item>
     </plurals>
     <plurals name="song_count_plural">
