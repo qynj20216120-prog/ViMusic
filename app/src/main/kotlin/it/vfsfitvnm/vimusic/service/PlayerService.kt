@@ -22,7 +22,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.support.v4.media.session.MediaSessionCompat
-import android.text.format.DateUtils
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -40,7 +39,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.common.audio.SonicAudioProcessor
-import androidx.media3.common.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
@@ -64,48 +62,7 @@ import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.extractor.DefaultExtractorsFactory
-import it.vfsfitvnm.vimusic.Database
-import it.vfsfitvnm.vimusic.MainActivity
-import it.vfsfitvnm.vimusic.R
-import it.vfsfitvnm.vimusic.models.Event
-import it.vfsfitvnm.vimusic.models.Format
-import it.vfsfitvnm.vimusic.models.QueuedMediaItem
-import it.vfsfitvnm.vimusic.models.Song
-import it.vfsfitvnm.vimusic.models.SongWithContentLength
-import it.vfsfitvnm.vimusic.preferences.AppearancePreferences
-import it.vfsfitvnm.vimusic.preferences.DataPreferences
-import it.vfsfitvnm.vimusic.preferences.PlayerPreferences
-import it.vfsfitvnm.vimusic.query
-import it.vfsfitvnm.vimusic.transaction
-import it.vfsfitvnm.vimusic.utils.ActionReceiver
-import it.vfsfitvnm.vimusic.utils.ConditionalCacheDataSourceFactory
-import it.vfsfitvnm.vimusic.utils.GlyphInterface
-import it.vfsfitvnm.vimusic.utils.InvincibleService
-import it.vfsfitvnm.vimusic.utils.TimerJob
-import it.vfsfitvnm.vimusic.utils.YouTubeRadio
-import it.vfsfitvnm.vimusic.utils.activityPendingIntent
-import it.vfsfitvnm.vimusic.utils.asDataSource
-import it.vfsfitvnm.vimusic.utils.broadcastPendingIntent
-import it.vfsfitvnm.vimusic.utils.defaultDataSource
-import it.vfsfitvnm.vimusic.utils.findCause
-import it.vfsfitvnm.vimusic.utils.findNextMediaItemById
-import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
-import it.vfsfitvnm.vimusic.utils.forceSeekToNext
-import it.vfsfitvnm.vimusic.utils.forceSeekToPrevious
-import it.vfsfitvnm.vimusic.utils.get
-import it.vfsfitvnm.vimusic.utils.handleRangeErrors
-import it.vfsfitvnm.vimusic.utils.handleUnknownErrors
-import it.vfsfitvnm.vimusic.utils.intent
-import it.vfsfitvnm.vimusic.utils.mediaItems
-import it.vfsfitvnm.vimusic.utils.progress
-import it.vfsfitvnm.vimusic.utils.readOnlyWhen
-import it.vfsfitvnm.vimusic.utils.retryIf
-import it.vfsfitvnm.vimusic.utils.setPlaybackPitch
-import it.vfsfitvnm.vimusic.utils.shouldBePlaying
-import it.vfsfitvnm.vimusic.utils.thumbnail
-import it.vfsfitvnm.vimusic.utils.timer
-import it.vfsfitvnm.vimusic.utils.toast
-import it.vfsfitvnm.vimusic.utils.withFallback
+import io.ktor.client.plugins.ClientRequestException
 import it.vfsfitvnm.compose.preferences.SharedPreferencesProperty
 import it.vfsfitvnm.core.data.enums.ExoPlayerDiskCacheSize
 import it.vfsfitvnm.core.data.utils.UriCache
@@ -130,7 +87,46 @@ import it.vfsfitvnm.providers.sponsorblock.SponsorBlock
 import it.vfsfitvnm.providers.sponsorblock.models.Action
 import it.vfsfitvnm.providers.sponsorblock.models.Category
 import it.vfsfitvnm.providers.sponsorblock.requests.segments
-import io.ktor.client.plugins.ClientRequestException
+import it.vfsfitvnm.vimusic.Database
+import it.vfsfitvnm.vimusic.MainActivity
+import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.models.Event
+import it.vfsfitvnm.vimusic.models.QueuedMediaItem
+import it.vfsfitvnm.vimusic.models.Song
+import it.vfsfitvnm.vimusic.models.SongWithContentLength
+import it.vfsfitvnm.vimusic.preferences.AppearancePreferences
+import it.vfsfitvnm.vimusic.preferences.DataPreferences
+import it.vfsfitvnm.vimusic.preferences.PlayerPreferences
+import it.vfsfitvnm.vimusic.query
+import it.vfsfitvnm.vimusic.transaction
+import it.vfsfitvnm.vimusic.utils.ActionReceiver
+import it.vfsfitvnm.vimusic.utils.ConditionalCacheDataSourceFactory
+import it.vfsfitvnm.vimusic.utils.GlyphInterface
+import it.vfsfitvnm.vimusic.utils.InvincibleService
+import it.vfsfitvnm.vimusic.utils.TimerJob
+import it.vfsfitvnm.vimusic.utils.YouTubeRadio
+import it.vfsfitvnm.vimusic.utils.activityPendingIntent
+import it.vfsfitvnm.vimusic.utils.asDataSource
+import it.vfsfitvnm.vimusic.utils.broadcastPendingIntent
+import it.vfsfitvnm.vimusic.utils.defaultDataSource
+import it.vfsfitvnm.vimusic.utils.findCause
+import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
+import it.vfsfitvnm.vimusic.utils.forceSeekToNext
+import it.vfsfitvnm.vimusic.utils.forceSeekToPrevious
+import it.vfsfitvnm.vimusic.utils.get
+import it.vfsfitvnm.vimusic.utils.handleRangeErrors
+import it.vfsfitvnm.vimusic.utils.handleUnknownErrors
+import it.vfsfitvnm.vimusic.utils.intent
+import it.vfsfitvnm.vimusic.utils.mediaItems
+import it.vfsfitvnm.vimusic.utils.progress
+import it.vfsfitvnm.vimusic.utils.readOnlyWhen
+import it.vfsfitvnm.vimusic.utils.retryIf
+import it.vfsfitvnm.vimusic.utils.setPlaybackPitch
+import it.vfsfitvnm.vimusic.utils.shouldBePlaying
+import it.vfsfitvnm.vimusic.utils.thumbnail
+import it.vfsfitvnm.vimusic.utils.timer
+import it.vfsfitvnm.vimusic.utils.toast
+import it.vfsfitvnm.vimusic.utils.withFallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -167,8 +163,8 @@ import kotlinx.coroutines.yield
 import kotlinx.datetime.Clock
 import java.io.IOException
 import kotlin.math.roundToInt
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 import android.os.Binder as AndroidBinder
 
 const val LOCAL_KEY_PREFIX = "local:"
@@ -536,7 +532,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
         ServiceNotifications.autoSkip.sendNotification(this) {
             this
-                .setSmallIcon(R.drawable.app_icon)
+                .setSmallIcon(R.drawable.alert_circle)
                 .setCategory(NotificationCompat.CATEGORY_ERROR)
                 .setOnlyAlertOnce(false)
                 .setContentIntent(activityPendingIntent<MainActivity>())
@@ -1050,11 +1046,6 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
     private fun createMediaSourceFactory() = DefaultMediaSourceFactory(
         /* dataSourceFactory = */ createYouTubeDataSourceResolverFactory(
-            findMediaItem = { videoId ->
-                withContext(Dispatchers.Main) {
-                    player.findNextMediaItemById(videoId)
-                }
-            },
             context = applicationContext,
             cache = cache
         ),
@@ -1330,12 +1321,11 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             SimpleCache(directory, cacheEvictor, createDatabaseProvider(context))
         }
 
-        @Suppress("CyclomaticComplexMethod")
+        @Suppress("CyclomaticComplexMethod", "TooGenericExceptionCaught")
         fun createYouTubeDataSourceResolverFactory(
             context: Context,
             cache: Cache,
             chunkLength: Long? = DEFAULT_CHUNK_LENGTH,
-            findMediaItem: suspend (videoId: String) -> MediaItem? = { null },
             uriCache: UriCache<String, Long?> = UriCache()
         ): DataSource.Factory = ResolvingDataSource.Factory(
             ConditionalCacheDataSourceFactory(
@@ -1344,7 +1334,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
                 shouldCache = { !it.isLocal }
             )
         ) { dataSpec ->
-            val mediaId = dataSpec.key?.removePrefix("https://youtube.com/watch?v=")
+            val requestedMediaId = dataSpec.key?.removePrefix("https://youtube.com/watch?v=")
                 ?: error("A key must be set")
 
             fun DataSpec.ranged(contentLength: Long?) = contentLength?.let {
@@ -1361,93 +1351,39 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             if (
                 dataSpec.isLocal || (
                     chunkLength != null && cache.isCached(
-                        /* key = */ mediaId,
+                        /* key = */ requestedMediaId,
                         /* position = */ dataSpec.position,
                         /* length = */ chunkLength
                     )
                     )
             ) dataSpec
-            else uriCache[mediaId]?.let { cachedUri ->
+            else uriCache[requestedMediaId]?.let { cachedUri ->
                 dataSpec
                     .withUri(cachedUri.uri)
                     .ranged(cachedUri.meta)
             } ?: run {
-                val body = runBlocking(Dispatchers.IO) {
-                    Innertube.player(PlayerBody(videoId = mediaId))
-                }?.getOrThrow()
-
-                if (body?.videoDetails?.videoId != mediaId) throw VideoIdMismatchException()
-
-                body.reason?.let { Log.w(TAG, it) }
-                val format = body.streamingData?.highestQualityFormat
-                    ?: throw PlayableFormatNotFoundException()
-                val url = when (val status = body.playabilityStatus?.status) {
-                    "OK" -> {
-                        val mediaItem = runCatching {
-                            runBlocking(Dispatchers.IO) { findMediaItem(mediaId) }
-                        }.getOrNull()
-                        val extras = mediaItem?.mediaMetadata?.extras?.songBundle
-
-                        if (extras?.durationText == null) format.approxDurationMs
-                            ?.div(1000)
-                            ?.let(DateUtils::formatElapsedTime)
-                            ?.removePrefix("0")
-                            ?.let { durationText ->
-                                extras?.durationText = durationText
-                                Database.instance.updateDurationText(mediaId, durationText)
-                            }
-
-                        transaction {
-                            runCatching {
-                                mediaItem?.let(Database.instance::insert)
-
-                                Database.instance.insert(
-                                    Format(
-                                        songId = mediaId,
-                                        itag = format.itag,
-                                        mimeType = format.mimeType,
-                                        bitrate = format.bitrate,
-                                        loudnessDb = body.playerConfig?.audioConfig?.normalizedLoudnessDb,
-                                        contentLength = format.contentLength,
-                                        lastModified = format.lastModified
-                                    )
-                                )
-                            }
-                        }
-
-                        runBlocking(Dispatchers.IO) {
-                            format.findUrl(mediaId)
-                        } ?: throw RestrictedVideoException(Exception("findUrl returned null for $mediaId"))
-                    }
-
-                    "UNPLAYABLE" -> throw UnplayableException()
-                    "LOGIN_REQUIRED" -> throw LoginRequiredException()
-
-                    else -> throw PlaybackException(
-                        /* message = */ status,
-                        /* cause = */ null,
-                        /* errorCode = */ PlaybackException.ERROR_CODE_REMOTE_ERROR
-                    )
-                } ?: throw UnplayableException()
-
-                val uri = url.toUri().let {
-                    if (body.cpn == null) it
-                    else it
-                        .buildUpon()
-                        .appendQueryParameter("cpn", body.cpn)
-                        .build()
+                val (url, contentLength) = runBlocking(Dispatchers.IO) {
+                    val body = Innertube.player(PlayerBody(videoId = requestedMediaId))?.getOrThrow()
+                        ?: throw Exception("API response was null.")
+                    val format = body.streamingData?.highestQualityFormat
+                        ?: throw Exception("Could not find a playable audio format in the response.")
+                    val finalUrl = format.findUrl(requestedMediaId)
+                        ?: throw Exception("Failed to generate a playable URL from the selected format.")
+                    Pair(finalUrl, format.contentLength)
                 }
 
+                val uri = url.toUri()
+
                 uriCache.push(
-                    key = mediaId,
-                    meta = format.contentLength,
+                    key = requestedMediaId,
+                    meta = contentLength,
                     uri = uri,
-                    validUntil = body.streamingData?.expiresInSeconds?.seconds?.let { Clock.System.now() + it }
+                    validUntil = Clock.System.now() + 24.hours
                 )
 
-                dataSpec
+                dataSpec.buildUpon().setKey(requestedMediaId).build()
                     .withUri(uri)
-                    .ranged(format.contentLength)
+                    .ranged(contentLength)
             }
         }
             .handleUnknownErrors {

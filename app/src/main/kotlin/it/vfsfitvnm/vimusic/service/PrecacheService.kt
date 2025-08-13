@@ -1,9 +1,9 @@
 package it.vfsfitvnm.vimusic.service
 
+import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.ServiceConnection
-import android.net.Uri
 import android.os.IBinder
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
@@ -49,6 +49,7 @@ import java.util.concurrent.Executors
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.net.toUri
 
 private val executor = Executors.newCachedThreadPool()
 private val coroutineScope = CoroutineScope(
@@ -139,7 +140,7 @@ class PrecacheService : DownloadService(
     override fun getDownloadManager(): DownloadManager {
         runCatching {
             if (bound) unbindService(serviceConnection)
-            bindService(intent<PlayerService>(), serviceConnection, Context.BIND_AUTO_CREATE)
+            bindService(intent<PlayerService>(), serviceConnection, BIND_AUTO_CREATE)
         }.exceptionOrNull()?.let {
             it.printStackTrace()
             toast(getString(R.string.error_pre_cache))
@@ -170,7 +171,6 @@ class PrecacheService : DownloadService(
             /* databaseProvider = */ PlayerService.createDatabaseProvider(this),
             /* cache = */ cache,
             /* upstreamFactory = */ PlayerService.createYouTubeDataSourceResolverFactory(
-                findMediaItem = { null },
                 context = this,
                 cache = cache,
                 chunkLength = null
@@ -240,6 +240,7 @@ class PrecacheService : DownloadService(
     }
 
     companion object {
+        @SuppressLint("UseKtx")
         fun scheduleCache(context: Context, mediaItem: MediaItem) {
             if (mediaItem.isLocal) return
 
@@ -247,7 +248,7 @@ class PrecacheService : DownloadService(
                 .Builder(
                     /* id      = */ mediaItem.mediaId,
                     /* uri     = */ mediaItem.requestMetadata.mediaUri
-                        ?: Uri.parse("https://youtube.com/watch?v=${mediaItem.mediaId}")
+                        ?: "https://youtube.com/watch?v=${mediaItem.mediaId}".toUri()
                 )
                 .setCustomCacheKey(mediaItem.mediaId)
                 .setData(mediaItem.mediaId.encodeToByteArray())

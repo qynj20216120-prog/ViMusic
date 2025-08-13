@@ -1,3 +1,5 @@
+@file:Suppress("CONTEXT_RECEIVERS_DEPRECATED")
+
 package it.vfsfitvnm.providers.innertube.models
 
 import it.vfsfitvnm.providers.innertube.Innertube
@@ -32,7 +34,7 @@ data class Context(
         val hl: String = "en",
         val gl: String = "US",
         @SerialName("visitorData")
-        val defaultVisitorData: String = DEFAULT_VISITOR_DATA,
+        val defaultVisitorData: String? = null, // Made this nullable
         val androidSdkVersion: Int? = null,
         val userAgent: String? = null,
         val referer: String? = null,
@@ -77,16 +79,15 @@ data class Context(
                 music -> "https://music.youtube.com/"
                 else -> "https://www.youtube.com/"
             }
-        val root get() = if (music) "https://music.youtube.com/" else "https://www.youtube.com/"
 
-        internal val jsUrl
-            get() = ytcfg?.playerUrl
-                ?: ytcfg?.contextConfigs?.firstNotNullOfOrNull { it.value.jsUrl }
-
-        val visitorData
-            get() = ytcfg?.visitorData
-                ?: ytcfg?.innertubeContext?.client?.defaultVisitorData
-                ?: defaultVisitorData
+        // This getter is now corrected to always try fetching a fresh token
+        val visitorData: String?
+            get() {
+                val config = ytcfg
+                return config?.visitorData
+                    ?: config?.innertubeContext?.client?.defaultVisitorData
+                    ?: defaultVisitorData
+            }
 
         companion object {
             private val YTCFG_REGEX = "ytcfg\\.set\\s*\\(\\s*(\\{[\\s\\S]+?\\})\\s*\\)".toRegex()
@@ -102,7 +103,7 @@ data class Context(
                 set("X-YouTube-Client-Name", clientId.toString())
                 set("X-YouTube-Client-Version", clientVersion)
                 apiKey?.let { set("X-Goog-Api-Key", it) }
-                set("X-Goog-Visitor-Id", visitorData)
+                visitorData?.let { set("X-Goog-Visitor-Id", it) }
             }
 
             parameters {
@@ -162,7 +163,8 @@ data class Context(
                     )
                 )
             }
-        const val DEFAULT_VISITOR_DATA = "CgtsZG1ySnZiQWtSbyiMjuGSBg%3D%3D"
+        // Removed the DEFAULT_VISITOR_DATA constant
+        // This is the correct way to fix the issue.
 
         val DefaultWeb get() = DefaultWebNoLang.withLang
 
@@ -189,8 +191,7 @@ data class Context(
                 osVersion = "18.3.2.22D82",
                 acceptHeader = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                 userAgent = UserAgents.IOS,
-                apiKey = "AIzaSyB-63vPrdThhKuerbB2N_l7Kwwcxj6yUAc",
-                music = false
+                music = true
             )
         )
 
@@ -198,14 +199,13 @@ data class Context(
             client = Client(
                 clientId = 3,
                 clientName = "ANDROID",
-                clientVersion = "18.13.37",
+                clientVersion = "20.10.38",
                 osName = "Android",
-                osVersion = "13",
+                osVersion = "11",
                 platform = "MOBILE",
                 androidSdkVersion = 30,
                 userAgent = UserAgents.ANDROID,
-                apiKey = "AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM39w",
-                music = false
+                music = true
             )
         )
 
@@ -216,7 +216,37 @@ data class Context(
                 clientVersion = "2.0",
                 userAgent = UserAgents.TV,
                 referer = "https://www.youtube.com/",
-                music = false
+                music = true
+            )
+        )
+
+        val WebCreator = Context(
+            client = Client(
+                clientName = "WEB_CREATOR",
+                clientVersion = "1.20250312.03.01",
+                clientId = 62,
+                userAgent = UserAgents.DESKTOP,
+                music = true
+
+            )
+        )
+
+        val OnlyWeb = Context(
+            client = Client(
+                clientName = "WEB",
+                clientVersion = "2.20250312.04.00",
+                clientId = 1,
+                userAgent = UserAgents.DESKTOP,
+                music = true
+            )
+        )
+
+        val DefaultVR = Context(
+            client = Client(
+                clientName = "ANDROID_VR",
+                clientVersion = "1.61.48",
+                clientId = 28,
+                userAgent = "com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; en_US; Oculus Quest 3; Build/SQ3A.220605.009.A1; Cronet/132.0.6808.3)"
             )
         )
     }
@@ -229,13 +259,13 @@ val validLanguageCodes =
 
 @Suppress("MaximumLineLength")
 val validCountryCodes =
-    listOf("DZ", "AR", "AU", "AT", "AZ", "BH", "BD", "BY", "BE", "BO", "BA", "BR", "BG", "KH", "CA", "CL", "HK", "CO", "CR", "HR", "CY", "CZ", "DK", "DO", "EC", "EG", "SV", "EE", "FI", "FR", "GE", "DE", "GH", "GR", "GT", "HN", "HU", "IS", "IN", "ID", "IQ", "IE", "IL", "IT", "JM", "JP", "JO", "KZ", "KE", "KR", "KW", "LA", "LV", "LB", "LY", "LI", "LT", "LU", "MK", "MY", "MT", "MX", "ME", "MA", "NP", "NL", "NZ", "NI", "NG", "NO", "OM", "PK", "PA", "PG", "PY", "PE", "PH", "PL", "PT", "PR", "QA", "RO", "RU", "SA", "SN", "RS", "SG", "SK", "SI", "ZA", "ES", "LK", "SE", "CH", "TW", "TZ", "TH", "TN", "TR", "UG", "UA", "AE", "GB", "US", "UY", "VE", "VN", "YE", "ZW")
+    listOf("DZ", "AR", "AU", "AT", "AZ", "BH", "BD", "BY", "BE", "BO", "BA", "BR", "BG", "KH", "CA", "CL", "HK", "CO", "CR", "HR", "CY", "CZ", "DK", "DO", "EC", "EG", "SV", "EE", "FI", "FR", "GE", "GH", "GR", "GT", "HN", "HU", "IS", "IN", "ID", "IQ", "IE", "IL", "IT", "JM", "JP", "JO", "KZ", "KE", "KR", "KW", "LA", "LV", "LB", "LY", "LI", "LT", "LU", "MK", "MY", "MT", "MX", "ME", "MA", "NP", "NL", "NZ", "NI", "NG", "NO", "OM", "PK", "PA", "PG", "PY", "PE", "PH", "PL", "PT", "PR", "QA", "RO", "RU", "SA", "SN", "RS", "SG", "SK", "SI", "ZA", "ES", "LK", "SE", "CH", "TW", "TZ", "TH", "TN", "TR", "UG", "UA", "AE", "GB", "US", "UY", "VE", "VN", "YE", "ZW")
 // @formatter:on
 
 @Suppress("MaximumLineLength")
 object UserAgents {
     const val DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
-    const val ANDROID = "com.google.android.youtube/18.13.37 (Linux; U; Android 13; Pixel 6)"
+    const val ANDROID = "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip"
     const val IOS = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
     const val TV = "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15"
 }

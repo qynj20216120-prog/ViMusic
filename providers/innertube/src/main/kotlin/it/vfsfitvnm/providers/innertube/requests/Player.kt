@@ -15,17 +15,27 @@ import it.vfsfitvnm.providers.utils.runCatchingCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 
+/**
+ * Iterates through a series of client contexts (IOS, Web, etc.) to find a valid player response.
+ */
 private suspend fun Innertube.tryContexts(
     body: PlayerBody,
     vararg contexts: Context
 ): PlayerResponse? {
-    contexts.forEach { context ->
+    for (context in contexts) {
         if (!currentCoroutineContext().isActive) return null
 
         logger.info("Trying ${context.client.clientName} ${context.client.clientVersion} ${context.client.platform}")
+
+        val config = context.client.getConfiguration()
+        if (config == null) {
+            logger.warn("Failed to get configuration for client ${context.client.clientName}")
+            continue // Skip to the next context
+        }
+
         val cpn = generateNonce(16).decodeToString()
-        runCatchingCancellable {
-            // The network call is stored in a variable now
+
+        val result: Result<PlayerResponse>? = runCatchingCancellable {
             val httpResponse = client.post(if (context.client.music) PLAYER_MUSIC else PLAYER) {
                 setBody(
                     body.copy(
@@ -33,43 +43,50 @@ private suspend fun Innertube.tryContexts(
                         cpn = cpn
                     )
                 )
-
                 context.apply()
-
                 parameter("t", generateNonce(12))
                 header("X-Goog-Api-Format-Version", "2")
                 parameter("id", body.videoId)
             }
 
             val responseAsText = httpResponse.bodyAsText()
-
             json.decodeFromString<PlayerResponse>(responseAsText)
-                .also { logger.info("Got $it") }
-
         }
-            ?.getOrNull()
-            ?.takeIf { it.isValid }
-            ?.let {
-                return it.copy(
-                    cpn = cpn,
-                    context = context
-                )
-            }
+
+        if (result == null) {
+            logger.warn("Context ${context.client.clientName} was cancelled or returned null.")
+            continue
+        }
+
+        val response = result.getOrNull()
+
+        if (response != null && response.isValid) {
+            return response.copy(cpn = cpn, context = context)
+        }
     }
 
     return null
 }
 
+/**
+ * An extension property to check if a PlayerResponse is valid for playback.
+ */
 private val PlayerResponse.isValid
     get() = playabilityStatus?.status == "OK" &&
         streamingData?.adaptiveFormats?.any { it.url != null || it.signatureCipher != null } == true
 
+/**
+ * Fetches the PlayerResponse for a given video by trying multiple client contexts.
+ */
 suspend fun Innertube.player(body: PlayerBody): Result<PlayerResponse?>? = runCatchingCancellable {
     tryContexts(
         body = body,
         Context.DefaultIOS,
         Context.DefaultWeb,
         Context.DefaultTV,
-        Context.DefaultAndroid
+        Context.DefaultAndroid,
+        Context.OnlyWeb,
+        Context.WebCreator,
+        Context.DefaultVR
     )
 }
