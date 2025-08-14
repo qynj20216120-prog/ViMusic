@@ -1,23 +1,33 @@
 package it.vfsfitvnm.vimusic.ui.screens.localplaylist
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,11 +35,19 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
@@ -84,7 +102,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 fun LocalPlaylistSongs(
     playlist: Playlist,
@@ -95,24 +113,49 @@ fun LocalPlaylistSongs(
     thumbnailContent = thumbnailContent,
     modifier = modifier
 ) {
-    val (colorPalette) = LocalAppearance.current
+    val (colorPalette, typography) = LocalAppearance.current
     val binder = LocalPlayerServiceBinder.current
     val menuState = LocalMenuState.current
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     val coroutineScope = rememberCoroutineScope()
     val lazyListState = rememberLazyListState()
 
     var songs by persistList<Song>("localPlaylist/${playlist.id}/songs")
 
-    // NEW: Add state for sorting
+    // Search state
+    var isSearching by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver(
+        save = { it.text },
+        restore = { TextFieldValue(it) }
+    )) { mutableStateOf(TextFieldValue("")) }
+
+    val searchFocusRequester = remember { FocusRequester() }
+
+    // Filter songs based on search query
+    val filteredSongs by remember {
+        derivedStateOf {
+            if (searchQuery.text.isBlank()) {
+                songs
+            } else {
+                songs.filter { song ->
+                    song.title.contains(searchQuery.text, ignoreCase = true) ||
+                        song.artistsText?.contains(searchQuery.text, ignoreCase = true) == true ||
+                        song.album?.contains(searchQuery.text, ignoreCase = true) == true
+                }
+            }
+        }
+    }
+
+    // Add state for sorting
     var sortBy by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SongSortBy.Position) }
     var sortOrder by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SortOrder.Ascending) }
 
     var loading by remember { mutableStateOf(false) }
 
-    // NEW: Fetch songs and apply sorting
+    // Fetch songs and apply sorting
     LaunchedEffect(playlist.id, sortBy, sortOrder) {
         Database.instance
             .playlistSongs(playlist.id, sortBy, sortOrder) // Use the new DAO method
@@ -126,6 +169,16 @@ fun LocalPlaylistSongs(
             loading = true
             sync(playlist, browseId)
             loading = false
+        }
+    }
+
+    // Focus search field when search mode is activated
+    LaunchedEffect(isSearching) {
+        if (isSearching) {
+            searchFocusRequester.requestFocus()
+        } else {
+            keyboardController?.hide()
+            searchQuery = TextFieldValue("")
         }
     }
 
@@ -184,116 +237,200 @@ fun LocalPlaylistSongs(
                     contentType = 0
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Header(
-                            title = playlist.name,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                        AnimatedVisibility(
+                            visible = !isSearching,
+                            enter = fadeIn() + slideInHorizontally(),
+                            exit = fadeOut() + slideOutHorizontally()
                         ) {
-                            SecondaryTextButton(
-                                text = stringResource(R.string.enqueue),
-                                enabled = songs.isNotEmpty(),
-                                onClick = {
-                                    binder?.player?.enqueue(songs.map { it.asMediaItem })
-                                }
-                            )
-
-                            Spacer(modifier = Modifier.weight(1f))
-
-                            AnimatedVisibility(loading) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                            }
-
-                            PlaylistDownloadIcon(
-                                songs = songs.map { it.asMediaItem }.toImmutableList()
-                            )
-
-                            // NEW: Add the sorting component
-                            if (playlist.sortable) {
-                                HeaderSongSortBy(
-                                    sortBy = sortBy,
-                                    setSortBy = { sortBy = it },
-                                    sortOrder = sortOrder,
-                                    setSortOrder = { sortOrder = it }
+                            Header(
+                                title = playlist.name,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            ) {
+                                SecondaryTextButton(
+                                    text = stringResource(R.string.enqueue),
+                                    enabled = filteredSongs.isNotEmpty(),
+                                    onClick = {
+                                        binder?.player?.enqueue(filteredSongs.map { it.asMediaItem })
+                                    }
                                 )
-                            }
 
-                            HeaderIconButton(
-                                icon = R.drawable.ellipsis_horizontal,
-                                color = colorPalette.text,
-                                onClick = {
-                                    menuState.display {
-                                        Menu {
-                                            playlist.browseId?.let { browseId ->
-                                                MenuEntry(
-                                                    icon = R.drawable.sync,
-                                                    text = stringResource(R.string.sync),
-                                                    enabled = !loading,
-                                                    onClick = {
-                                                        menuState.hide()
-                                                        coroutineScope.launch {
-                                                            loading = true
-                                                            sync(playlist, browseId)
-                                                            loading = false
-                                                        }
-                                                    }
-                                                )
+                                Spacer(modifier = Modifier.weight(1f))
 
-                                                songs.firstOrNull()?.id?.let { firstSongId ->
+                                AnimatedVisibility(loading) {
+                                    CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                }
+
+                                PlaylistDownloadIcon(
+                                    songs = filteredSongs.map { it.asMediaItem }.toImmutableList()
+                                )
+
+                                // Add the sorting component
+                                if (playlist.sortable) {
+                                    HeaderSongSortBy(
+                                        sortBy = sortBy,
+                                        setSortBy = { sortBy = it },
+                                        sortOrder = sortOrder,
+                                        setSortOrder = { sortOrder = it }
+                                    )
+                                }
+
+                                // Search icon
+                                HeaderIconButton(
+                                    icon = R.drawable.search,
+                                    color = if (isSearching) colorPalette.accent else colorPalette.text,
+                                    onClick = {
+                                        isSearching = true
+                                    }
+                                )
+
+                                HeaderIconButton(
+                                    icon = R.drawable.ellipsis_horizontal,
+                                    color = colorPalette.text,
+                                    onClick = {
+                                        menuState.display {
+                                            Menu {
+                                                playlist.browseId?.let { browseId ->
                                                     MenuEntry(
-                                                        icon = R.drawable.play,
-                                                        text = stringResource(R.string.watch_playlist_on_youtube),
+                                                        icon = R.drawable.sync,
+                                                        text = stringResource(R.string.sync),
+                                                        enabled = !loading,
                                                         onClick = {
                                                             menuState.hide()
-                                                            binder?.player?.pause()
-                                                            uriHandler.openUri(
-                                                                "https://youtube.com/watch?v=$firstSongId&list=${
-                                                                    playlist.browseId.drop(2)
-                                                                }"
-                                                            )
+                                                            coroutineScope.launch {
+                                                                loading = true
+                                                                sync(playlist, browseId)
+                                                                loading = false
+                                                            }
                                                         }
                                                     )
 
-                                                    MenuEntry(
-                                                        icon = R.drawable.musical_notes,
-                                                        text = stringResource(R.string.open_in_youtube_music),
-                                                        onClick = {
-                                                            menuState.hide()
-                                                            binder?.player?.pause()
-                                                            if (
-                                                                !launchYouTubeMusic(
-                                                                    context = context,
-                                                                    endpoint = "watch?v=$firstSongId&list=${
+                                                    songs.firstOrNull()?.id?.let { firstSongId ->
+                                                        MenuEntry(
+                                                            icon = R.drawable.play,
+                                                            text = stringResource(R.string.watch_playlist_on_youtube),
+                                                            onClick = {
+                                                                menuState.hide()
+                                                                binder?.player?.pause()
+                                                                uriHandler.openUri(
+                                                                    "https://youtube.com/watch?v=$firstSongId&list=${
                                                                         playlist.browseId.drop(2)
                                                                     }"
                                                                 )
-                                                            ) context.toast(
-                                                                context.getString(R.string.youtube_music_not_installed)
-                                                            )
-                                                        }
-                                                    )
+                                                            }
+                                                        )
+
+                                                        MenuEntry(
+                                                            icon = R.drawable.musical_notes,
+                                                            text = stringResource(R.string.open_in_youtube_music),
+                                                            onClick = {
+                                                                menuState.hide()
+                                                                binder?.player?.pause()
+                                                                if (
+                                                                    !launchYouTubeMusic(
+                                                                        context = context,
+                                                                        endpoint = "watch?v=$firstSongId&list=${
+                                                                            playlist.browseId.drop(2)
+                                                                        }"
+                                                                    )
+                                                                ) context.toast(
+                                                                    context.getString(R.string.youtube_music_not_installed)
+                                                                )
+                                                            }
+                                                        )
+                                                    }
                                                 }
+
+                                                MenuEntry(
+                                                    icon = R.drawable.pencil,
+                                                    text = stringResource(R.string.rename),
+                                                    onClick = {
+                                                        menuState.hide()
+                                                        isRenaming = true
+                                                    }
+                                                )
+
+                                                MenuEntry(
+                                                    icon = R.drawable.trash,
+                                                    text = stringResource(R.string.delete),
+                                                    onClick = {
+                                                        menuState.hide()
+                                                        isDeleting = true
+                                                    }
+                                                )
                                             }
-
-                                            MenuEntry(
-                                                icon = R.drawable.pencil,
-                                                text = stringResource(R.string.rename),
-                                                onClick = {
-                                                    menuState.hide()
-                                                    isRenaming = true
-                                                }
-                                            )
-
-                                            MenuEntry(
-                                                icon = R.drawable.trash,
-                                                text = stringResource(R.string.delete),
-                                                onClick = {
-                                                    menuState.hide()
-                                                    isDeleting = true
-                                                }
-                                            )
                                         }
                                     }
-                                }
-                            )
+                                )
+                            }
+                        }
+
+                        // Search bar with animation - FIXED VERSION
+                        AnimatedVisibility(
+                            visible = isSearching,
+                            enter = fadeIn() + slideInHorizontally { -it },
+                            exit = fadeOut() + slideOutHorizontally { -it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clipToBounds() // This prevents the animation overflow
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .background(
+                                        color = colorPalette.background1,
+                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(50.dp)
+                                    )
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BasicTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .focusRequester(searchFocusRequester)
+                                        .padding(vertical = 12.dp),
+                                    textStyle = typography.l.copy(color = colorPalette.text),
+                                    cursorBrush = SolidColor(colorPalette.accent),
+                                    decorationBox = { innerTextField ->
+                                        if (searchQuery.text.isEmpty()) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                androidx.compose.material3.Icon(
+                                                    painter = androidx.compose.ui.res.painterResource(R.drawable.search),
+                                                    contentDescription = null,
+                                                    tint = colorPalette.textDisabled,
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .padding(end = 8.dp)
+                                                )
+                                                androidx.compose.material3.Text(
+                                                    text = stringResource(R.string.search_placeholder),
+                                                    style = typography.l,
+                                                    color = colorPalette.textDisabled
+                                                )
+                                            }
+                                        }
+                                        innerTextField()
+                                    },
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(
+                                        onSearch = { keyboardController?.hide() }
+                                    ),
+                                    singleLine = true
+                                )
+
+                                HeaderIconButton(
+                                    icon = R.drawable.close,
+                                    color = colorPalette.textSecondary,
+                                    onClick = {
+                                        isSearching = false
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
                         }
 
                         if (!isLandscape) thumbnailContent()
@@ -301,10 +438,12 @@ fun LocalPlaylistSongs(
                 }
 
                 itemsIndexed(
-                    items = songs,
+                    items = filteredSongs,
                     key = { index, song -> "${song.id}-$index" },
                     contentType = { _, song -> song }
                 ) { index, song ->
+                    val isSearchResult = isSearching && searchQuery.text.isNotBlank()
+
                     SongItem(
                         modifier = Modifier
                             .combinedClickable(
@@ -320,7 +459,7 @@ fun LocalPlaylistSongs(
                                 onClick = {
                                     binder?.stopRadio()
                                     binder?.player?.forcePlayAtIndex(
-                                        items = songs.map { it.asMediaItem },
+                                        items = filteredSongs.map { it.asMediaItem },
                                         index = index
                                     )
                                 }
@@ -330,12 +469,18 @@ fun LocalPlaylistSongs(
                                 reorderingState = reorderingState,
                                 index = index
                             )
-                            .background(colorPalette.background0),
+                            .background(
+                                if (isSearchResult && (song.title.contains(searchQuery.text, ignoreCase = true) ||
+                                        song.artistsText?.contains(searchQuery.text, ignoreCase = true) == true ||
+                                        song.album?.contains(searchQuery.text, ignoreCase = true) == true))
+                                    colorPalette.background1.copy(alpha = 0.3f)
+                                else colorPalette.background0
+                            ),
                         song = song,
                         thumbnailSize = Dimensions.thumbnails.song,
                         trailingContent = {
-                            // NEW: Only show reorder handle when sorting by position
-                            if (sortBy == SongSortBy.Position) {
+                            // Only show reorder handle when sorting by position and not searching
+                            if (sortBy == SongSortBy.Position && !isSearching) {
                                 ReorderHandle(
                                     reorderingState = reorderingState,
                                     index = index
@@ -354,11 +499,11 @@ fun LocalPlaylistSongs(
             icon = R.drawable.shuffle,
             visible = !reorderingState.isDragging,
             onClick = {
-                if (songs.isEmpty()) return@FloatingActionsContainerWithScrollToTop
+                if (filteredSongs.isEmpty()) return@FloatingActionsContainerWithScrollToTop
 
                 binder?.stopRadio()
                 binder?.player?.forcePlayFromBeginning(
-                    songs.shuffled().map { it.asMediaItem }
+                    filteredSongs.shuffled().map { it.asMediaItem }
                 )
             }
         )
