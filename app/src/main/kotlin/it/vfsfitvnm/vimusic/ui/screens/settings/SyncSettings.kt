@@ -1,6 +1,9 @@
 package it.vfsfitvnm.vimusic.ui.screens.settings
 
+import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
@@ -73,9 +76,19 @@ fun SyncSettings(
     var deletingPipedSession: Int? by rememberSaveable { mutableStateOf(null) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
+            val fileName = uri.toFileName(context) ?: ""
+            if (!fileName.lowercase().endsWith(".csv")) {
+                Toast.makeText(
+                    context,
+                    "Please select a valid .csv file",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@rememberLauncherForActivityResult
+            }
+
             coroutineScope.launch {
                 try {
                     context.contentResolver.openInputStream(uri)?.let { inputStream ->
@@ -84,7 +97,11 @@ fun SyncSettings(
                         showingColumnMappingDialog = Pair(uri, header)
                     }
                 } catch (_: Exception) {
-                    // Handle file reading errors if needed
+                    Toast.makeText(
+                        context,
+                        "Failed to read CSV file",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         }
@@ -511,7 +528,16 @@ fun SyncSettings(
             SettingsEntry(
                 title = stringResource(R.string.import_from_csv),
                 text = stringResource(R.string.import_from_csv_description),
-                onClick = { filePickerLauncher.launch("text/csv") }
+                onClick = {
+                    filePickerLauncher.launch(
+                        arrayOf(
+                            "text/csv",
+                            "text/comma-separated-values",
+                            "application/csv",
+                            "application/vnd.ms-excel"
+                        )
+                    )
+                }
             )
         }
         SettingsGroup(title = stringResource(R.string.piped)) {
@@ -550,4 +576,15 @@ fun SyncSettings(
             }
         }
     }
+}
+
+private fun Uri.toFileName(context: Context): String? {
+    val cursor = context.contentResolver.query(this, null, null, null, null)
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val index = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0) return it.getString(index)
+        }
+    }
+    return null
 }
