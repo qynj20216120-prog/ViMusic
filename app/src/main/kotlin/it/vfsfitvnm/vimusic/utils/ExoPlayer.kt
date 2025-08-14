@@ -220,8 +220,16 @@ val Context.defaultDataSource
     get() = DefaultDataSource.Factory(
         this,
         DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Range" to "bytes=0-",
+                    "Cookie" to "CONSENT=YES+cb",
+                    "Referer" to ""
+                )
+            )
             .setConnectTimeoutMs(20000)
             .setReadTimeoutMs(15000)
-            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
             .setAllowCrossProtocolRedirects(true)
+            .withNetworkRetry()
     )

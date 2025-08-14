@@ -1,6 +1,5 @@
 package it.vfsfitvnm.providers.innertube
 
-import it.vfsfitvnm.providers.innertube.models.Context
 import it.vfsfitvnm.providers.innertube.models.MusicNavigationButtonRenderer
 import it.vfsfitvnm.providers.innertube.models.NavigationEndpoint
 import it.vfsfitvnm.providers.innertube.models.Runs
@@ -27,6 +26,7 @@ import io.ktor.http.parameters
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Protocol
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -89,7 +89,13 @@ object Innertube {
         install(OriginInterceptor)
 
         engine {
+            val modernSpec = okhttp3.ConnectionSpec.Builder(okhttp3.ConnectionSpec.MODERN_TLS)
+                .tlsVersions(okhttp3.TlsVersion.TLS_1_3, okhttp3.TlsVersion.TLS_1_2)
+                .build()
             config {
+                connectionSpecs(listOf(modernSpec, okhttp3.ConnectionSpec.CLEARTEXT))
+                protocols(listOf(Protocol.HTTP_2, Protocol.HTTP_1_1))
+
                 connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
                 readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
                 writeTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
@@ -104,7 +110,7 @@ object Innertube {
                 headers {
                     // Use consistent working API key
                     set("X-Goog-Api-Key", API_KEY)
-                    set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
                     set("Accept", "application/json")
                     set("Accept-Language", "en-US,en;q=0.9")
                     set("Accept-Encoding", "gzip, deflate, br")

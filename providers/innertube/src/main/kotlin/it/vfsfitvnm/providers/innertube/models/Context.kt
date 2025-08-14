@@ -264,7 +264,7 @@ val validCountryCodes =
 
 @Suppress("MaximumLineLength")
 object UserAgents {
-    const val DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+    const val DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0"
     const val ANDROID = "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip"
     const val IOS = "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)"
     const val TV = "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15"

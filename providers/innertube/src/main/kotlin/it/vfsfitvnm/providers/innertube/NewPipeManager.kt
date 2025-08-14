@@ -18,7 +18,7 @@ private class NewPipeDownloaderImpl : Downloader() {
         val requestBuilder = okhttp3.Request.Builder()
             .method(request.httpMethod(), request.dataToSend()?.toRequestBody())
             .url(request.url())
-        requestBuilder.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0")
+        requestBuilder.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:141.0) Gecko/20100101 Firefox/141.0")
 
         request.headers().forEach { (headerName, headerValueList) ->
             if (!headerName.equals("User-Agent", ignoreCase = true)) {
