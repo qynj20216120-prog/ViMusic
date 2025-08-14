@@ -154,6 +154,8 @@ interface Database {
             SortOrder.Descending -> if (isLocal) localSongsByTitleDesc() else songsByTitleDesc()
         }
 
+        // FIX 1: Added Position to this branch to make the 'when' exhaustive.
+        SongSortBy.Position,
         SongSortBy.DateAdded -> when (sortOrder) {
             SortOrder.Ascending -> if (isLocal) localSongsByRowIdAsc() else songsByRowIdAsc()
             SortOrder.Descending -> if (isLocal) localSongsByRowIdDesc() else songsByRowIdDesc()
@@ -198,6 +200,8 @@ interface Database {
             SortOrder.Descending -> favoritesByTitleDesc()
         }
 
+        // FIX 2: Added Position to this branch to make the 'when' exhaustive.
+        SongSortBy.Position,
         SongSortBy.DateAdded -> when (sortOrder) {
             SortOrder.Ascending -> favoritesByLikedAtAsc()
             SortOrder.Descending -> favoritesByLikedAtDesc()
@@ -339,17 +343,54 @@ interface Database {
     @Query("SELECT * FROM Playlist WHERE id = :id")
     fun playlist(id: Long): Flow<Playlist?>
 
-    @RewriteQueriesToDropUnusedColumns
-    @Transaction
-    @Query(
-        """
-        SELECT Song.* FROM SortedSongPlaylistMap
-        INNER JOIN Song on Song.id = SortedSongPlaylistMap.songId
-        WHERE playlistId = :id
-        ORDER BY SortedSongPlaylistMap.position
-        """
-    )
-    fun playlistSongs(id: Long): Flow<List<Song>?>
+    // FIX 4: Re-implemented playlistSongs to support dynamic sorting.
+    // It now calls private helper functions with the correct SQL query.
+    fun playlistSongs(id: Long, sortBy: SongSortBy, sortOrder: SortOrder): Flow<List<Song>?> {
+        return when (sortBy) {
+            SongSortBy.Position -> when (sortOrder) {
+                SortOrder.Ascending -> _playlistSongsByPositionAsc(id)
+                SortOrder.Descending -> _playlistSongsByPositionDesc(id)
+            }
+            SongSortBy.DateAdded -> when (sortOrder) {
+                SortOrder.Ascending -> _playlistSongsByDateAddedAsc(id)
+                SortOrder.Descending -> _playlistSongsByDateAddedDesc(id)
+            }
+            SongSortBy.Title -> when (sortOrder) {
+                SortOrder.Ascending -> _playlistSongsByTitleAsc(id)
+                SortOrder.Descending -> _playlistSongsByTitleDesc(id)
+            }
+            SongSortBy.PlayTime -> when (sortOrder) {
+                SortOrder.Ascending -> _playlistSongsByPlayTimeAsc(id)
+                SortOrder.Descending -> _playlistSongsByPlayTimeDesc(id)
+            }
+        }
+    }
+
+    // FIX 4: Helper functions for playlistSongs
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY SongPlaylistMap.position ASC")
+    fun _playlistSongsByPositionAsc(id: Long): Flow<List<Song>?>
+
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY SongPlaylistMap.position DESC")
+    fun _playlistSongsByPositionDesc(id: Long): Flow<List<Song>?>
+
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY SongPlaylistMap.ROWID ASC")
+    fun _playlistSongsByDateAddedAsc(id: Long): Flow<List<Song>?>
+
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY SongPlaylistMap.ROWID DESC")
+    fun _playlistSongsByDateAddedDesc(id: Long): Flow<List<Song>?>
+
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY Song.title COLLATE NOCASE ASC")
+    fun _playlistSongsByTitleAsc(id: Long): Flow<List<Song>?>
+
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY Song.title COLLATE NOCASE DESC")
+    fun _playlistSongsByTitleDesc(id: Long): Flow<List<Song>?>
+
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY Song.totalPlayTimeMs ASC")
+    fun _playlistSongsByPlayTimeAsc(id: Long): Flow<List<Song>?>
+
+    @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY Song.totalPlayTimeMs DESC")
+    fun _playlistSongsByPlayTimeDesc(id: Long): Flow<List<Song>?>
+
 
     @Transaction
     @Query("SELECT * FROM Playlist WHERE id = :id")
@@ -554,6 +595,8 @@ interface Database {
             SortOrder.Descending -> songsWithContentLengthByTitleDesc()
         }
 
+        // FIX 3: Added Position to this branch to make the 'when' exhaustive.
+        SongSortBy.Position,
         SongSortBy.DateAdded -> when (sortOrder) {
             SortOrder.Ascending -> songsWithContentLengthByRowIdAsc()
             SortOrder.Descending -> songsWithContentLengthByRowIdDesc()
@@ -814,7 +857,7 @@ interface Database {
         PipedSession::class
     ],
     views = [SortedSongPlaylistMap::class],
-    version = 32,
+    version = 33,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -865,7 +908,8 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
                 From22To23Migration(),
                 From23To24Migration(),
                 From30To31Migration(),
-                From31To32Migration()
+                From31To32Migration(),
+                From32To33Migration()
             )
             .build()
 
@@ -1143,6 +1187,13 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
             // Re-create indices for performance
             db.execSQL("CREATE INDEX `index_SongPlaylistMap_songId` ON `SongPlaylistMap` (`songId`)")
             db.execSQL("CREATE INDEX `index_SongPlaylistMap_playlistId` ON `SongPlaylistMap` (`playlistId`)")
+        }
+    }
+
+    class From32To33Migration : Migration(32, 33) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Add the 'sortable' column to the 'Playlist' table
+            db.execSQL("ALTER TABLE Playlist ADD COLUMN sortable INTEGER NOT NULL DEFAULT 1")
         }
     }
 }

@@ -9,16 +9,13 @@ import androidx.compose.runtime.setValue
 import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.models.Playlist
-import it.vfsfitvnm.vimusic.models.Song
 import it.vfsfitvnm.vimusic.ui.components.themed.Scaffold
 import it.vfsfitvnm.vimusic.ui.components.themed.adaptiveThumbnailContent
 import it.vfsfitvnm.vimusic.ui.screens.GlobalRoutes
 import it.vfsfitvnm.vimusic.ui.screens.Route
 import it.vfsfitvnm.compose.persist.PersistMapCleanup
 import it.vfsfitvnm.compose.persist.persist
-import it.vfsfitvnm.compose.persist.persistList
 import it.vfsfitvnm.compose.routing.RouteHandler
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 
@@ -34,7 +31,6 @@ fun LocalPlaylistScreen(playlistId: Long) {
 
         Content {
             var playlist by persist<Playlist?>("localPlaylist/$playlistId/playlist")
-            var songs by persistList<Song>("localPlaylist/$playlistId/songs")
 
             LaunchedEffect(Unit) {
                 Database.instance
@@ -44,13 +40,7 @@ fun LocalPlaylistScreen(playlistId: Long) {
                     .collect { playlist = it }
             }
 
-            LaunchedEffect(Unit) {
-                Database.instance
-                    .playlistSongs(playlistId)
-                    .filterNotNull()
-                    .distinctUntilChanged()
-                    .collect { songs = it.toImmutableList() }
-            }
+            // Song fetching logic is removed from here
 
             val thumbnailContent = remember(playlist) {
                 playlist?.thumbnail?.let { url ->
@@ -74,9 +64,8 @@ fun LocalPlaylistScreen(playlistId: Long) {
                 saveableStateHolder.SaveableStateProvider(currentTabIndex) {
                     playlist?.let {
                         when (currentTabIndex) {
-                            0 -> LocalPlaylistSongs(
+                            0 -> LocalPlaylistSongs( // Pass the playlist object directly
                                 playlist = it,
-                                songs = songs,
                                 thumbnailContent = thumbnailContent,
                                 onDelete = pop
                             )

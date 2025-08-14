@@ -55,6 +55,7 @@ import it.vfsfitvnm.vimusic.ui.components.themed.ReorderHandle
 import it.vfsfitvnm.vimusic.ui.components.themed.SecondaryTextButton
 import it.vfsfitvnm.vimusic.ui.components.themed.TextFieldDialog
 import it.vfsfitvnm.vimusic.ui.items.SongItem
+import it.vfsfitvnm.vimusic.ui.screens.home.HeaderSongSortBy
 import it.vfsfitvnm.vimusic.utils.PlaylistDownloadIcon
 import it.vfsfitvnm.vimusic.utils.asMediaItem
 import it.vfsfitvnm.vimusic.utils.completed
@@ -64,25 +65,29 @@ import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
 import it.vfsfitvnm.vimusic.utils.launchYouTubeMusic
 import it.vfsfitvnm.vimusic.utils.playingSong
 import it.vfsfitvnm.vimusic.utils.toast
+import it.vfsfitvnm.compose.persist.persistList
 import it.vfsfitvnm.compose.reordering.animateItemPlacement
 import it.vfsfitvnm.compose.reordering.draggedItem
 import it.vfsfitvnm.compose.reordering.rememberReorderingState
+import it.vfsfitvnm.core.data.enums.SongSortBy
+import it.vfsfitvnm.core.data.enums.SortOrder
 import it.vfsfitvnm.core.ui.Dimensions
 import it.vfsfitvnm.core.ui.LocalAppearance
+import it.vfsfitvnm.core.ui.utils.enumSaver
 import it.vfsfitvnm.core.ui.utils.isLandscape
 import it.vfsfitvnm.providers.innertube.Innertube
 import it.vfsfitvnm.providers.innertube.models.bodies.BrowseBody
 import it.vfsfitvnm.providers.innertube.requests.playlistPage
-import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LocalPlaylistSongs(
     playlist: Playlist,
-    songs: ImmutableList<Song>,
     onDelete: () -> Unit,
     thumbnailContent: @Composable () -> Unit,
     modifier: Modifier = Modifier
@@ -99,7 +104,22 @@ fun LocalPlaylistSongs(
     val coroutineScope = rememberCoroutineScope()
     val lazyListState = rememberLazyListState()
 
+    var songs by persistList<Song>("localPlaylist/${playlist.id}/songs")
+
+    // NEW: Add state for sorting
+    var sortBy by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SongSortBy.Position) }
+    var sortOrder by rememberSaveable(stateSaver = enumSaver()) { mutableStateOf(SortOrder.Ascending) }
+
     var loading by remember { mutableStateOf(false) }
+
+    // NEW: Fetch songs and apply sorting
+    LaunchedEffect(playlist.id, sortBy, sortOrder) {
+        Database.instance
+            .playlistSongs(playlist.id, sortBy, sortOrder) // Use the new DAO method
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { songs = it.toImmutableList() }
+    }
 
     LaunchedEffect(Unit) {
         if (DataPreferences.autoSyncPlaylists) playlist.browseId?.let { browseId ->
@@ -185,6 +205,16 @@ fun LocalPlaylistSongs(
                             PlaylistDownloadIcon(
                                 songs = songs.map { it.asMediaItem }.toImmutableList()
                             )
+
+                            // NEW: Add the sorting component
+                            if (playlist.sortable) {
+                                HeaderSongSortBy(
+                                    sortBy = sortBy,
+                                    setSortBy = { sortBy = it },
+                                    sortOrder = sortOrder,
+                                    setSortOrder = { sortOrder = it }
+                                )
+                            }
 
                             HeaderIconButton(
                                 icon = R.drawable.ellipsis_horizontal,
@@ -304,10 +334,13 @@ fun LocalPlaylistSongs(
                         song = song,
                         thumbnailSize = Dimensions.thumbnails.song,
                         trailingContent = {
-                            ReorderHandle(
-                                reorderingState = reorderingState,
-                                index = index
-                            )
+                            // NEW: Only show reorder handle when sorting by position
+                            if (sortBy == SongSortBy.Position) {
+                                ReorderHandle(
+                                    reorderingState = reorderingState,
+                                    index = index
+                                )
+                            }
                         },
                         clip = !reorderingState.isDragging,
                         isPlaying = playing && currentMediaId == song.id

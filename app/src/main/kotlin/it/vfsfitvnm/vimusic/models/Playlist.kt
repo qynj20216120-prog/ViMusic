@@ -10,5 +10,6 @@ data class Playlist(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val browseId: String? = null,
-    val thumbnail: String? = null
+    val thumbnail: String? = null,
+    val sortable: Boolean = true
 )
