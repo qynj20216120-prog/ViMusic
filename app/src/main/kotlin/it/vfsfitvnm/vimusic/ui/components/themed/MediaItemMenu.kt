@@ -130,7 +130,6 @@ fun InHistoryMediaItemMenu(
 fun InPlaylistMediaItemMenu(
     onDismiss: () -> Unit,
     playlistId: Long,
-    positionInPlaylist: Int,
     song: Song,
     modifier: Modifier = Modifier
 ) = NonQueuedMediaItemMenu(
@@ -138,8 +137,7 @@ fun InPlaylistMediaItemMenu(
     onDismiss = onDismiss,
     onRemoveFromPlaylist = {
         transaction {
-            Database.instance.move(playlistId, positionInPlaylist, Int.MAX_VALUE)
-            Database.instance.delete(SongPlaylistMap(song.id, playlistId, Int.MAX_VALUE))
+            Database.instance.delete(SongPlaylistMap(songId = song.id, playlistId = playlistId, position = Int.MAX_VALUE))
         }
     },
     modifier = modifier

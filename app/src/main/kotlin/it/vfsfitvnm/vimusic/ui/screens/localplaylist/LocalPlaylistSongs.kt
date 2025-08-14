@@ -272,7 +272,7 @@ fun LocalPlaylistSongs(
 
                 itemsIndexed(
                     items = songs,
-                    key = { _, song -> song.id },
+                    key = { index, song -> "${song.id}-$index" },
                     contentType = { _, song -> song }
                 ) { index, song ->
                     SongItem(
@@ -282,7 +282,6 @@ fun LocalPlaylistSongs(
                                     menuState.display {
                                         InPlaylistMediaItemMenu(
                                             playlistId = playlist.id,
-                                            positionInPlaylist = index,
                                             song = song,
                                             onDismiss = menuState::hide
                                         )

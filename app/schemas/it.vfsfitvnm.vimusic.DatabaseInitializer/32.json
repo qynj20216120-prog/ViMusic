@@ -1,8 +1,8 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 30,
-    "identityHash": "590014b927062c7c2714fc5fcc0f9302",
+    "version": 32,
+    "identityHash": "0291daa80f48f4d0c712c39475ad9134",
     "entities": [
       {
         "tableName": "Song",
@@ -80,8 +80,14 @@
       },
       {
         "tableName": "SongPlaylistMap",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`songId` TEXT NOT NULL, `playlistId` INTEGER NOT NULL, `position` INTEGER NOT NULL, PRIMARY KEY(`songId`, `playlistId`), FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`playlistId`) REFERENCES `Playlist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `songId` TEXT NOT NULL, `playlistId` INTEGER NOT NULL, `position` INTEGER NOT NULL, FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`playlistId`) REFERENCES `Playlist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
           {
             "fieldPath": "songId",
             "columnName": "songId",
@@ -102,10 +108,9 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": false,
+          "autoGenerate": true,
           "columnNames": [
-            "songId",
-            "playlistId"
+            "id"
           ]
         },
         "indices": [
@@ -719,7 +724,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '590014b927062c7c2714fc5fcc0f9302')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0291daa80f48f4d0c712c39475ad9134')"
     ]
   }
 }

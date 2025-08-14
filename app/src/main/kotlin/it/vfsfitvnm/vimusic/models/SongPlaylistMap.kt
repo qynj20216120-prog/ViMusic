@@ -1,13 +1,14 @@
 package it.vfsfitvnm.vimusic.models
 
 import androidx.compose.runtime.Immutable
-import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
 
 @Immutable
 @Entity(
-    primaryKeys = ["songId", "playlistId"],
+    indices = [Index("songId"), Index("playlistId")],
     foreignKeys = [
         ForeignKey(
             entity = Song::class,
@@ -24,7 +25,8 @@ import androidx.room.ForeignKey
     ]
 )
 data class SongPlaylistMap(
-    @ColumnInfo(index = true) val songId: String,
-    @ColumnInfo(index = true) val playlistId: Long,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val songId: String,
+    val playlistId: Long,
     val position: Int
 )

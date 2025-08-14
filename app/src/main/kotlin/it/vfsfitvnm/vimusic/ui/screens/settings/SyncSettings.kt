@@ -4,7 +4,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -12,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
@@ -20,6 +26,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEachIndexed
 import androidx.credentials.CredentialManager
@@ -76,7 +83,7 @@ fun SyncSettings(
                         val header = parser.getHeader(inputStream)
                         showingColumnMappingDialog = Pair(uri, header)
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Handle file reading errors if needed
                 }
             }
@@ -85,10 +92,17 @@ fun SyncSettings(
 
     // CSV Dialog 1: Column Mapping
     showingColumnMappingDialog?.let { (uri, header) ->
-        var titleColumnIndex by remember { mutableStateOf(0) }
-        var artistColumnIndex by remember { mutableStateOf(1) }
+        val smartTitleIndex = remember(header) { header.indexOfFirst { it.contains("name", ignoreCase = true) || it.contains("title", ignoreCase = true) }.coerceAtLeast(0) }
+        val smartArtistIndex = remember(header) { header.indexOfFirst { it.contains("artist", ignoreCase = true) }.coerceAtLeast(if (smartTitleIndex == 1) 0 else 1) }
+        val smartAlbumIndex = remember(header) { header.indexOfFirst { it.contains("album", ignoreCase = true) }.let { if (it == -1) null else it } }
+
+        var titleColumnIndex by remember { mutableStateOf(smartTitleIndex) }
+        var artistColumnIndex by remember { mutableStateOf(smartArtistIndex) }
+        var albumColumnIndex by remember { mutableStateOf(smartAlbumIndex) }
+
         var isTitleExpanded by remember { mutableStateOf(false) }
         var isArtistExpanded by remember { mutableStateOf(false) }
+        var isAlbumExpanded by remember { mutableStateOf(false) }
 
         DefaultDialog(onDismiss = { showingColumnMappingDialog = null }) {
             Column(
@@ -97,86 +111,96 @@ fun SyncSettings(
                     .padding(all = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(text = stringResource(R.string.map_csv_columns), style = typography.m.semiBold)
+                Text(text = stringResource(R.string.map_csv_columns), style = typography.m.semiBold, color = colorPalette.text)
 
-                ExposedDropdownMenuBox(
-                    expanded = isTitleExpanded,
-                    onExpandedChange = { isTitleExpanded = it }
-                ) {
+                ExposedDropdownMenuBox(expanded = isTitleExpanded, onExpandedChange = { isTitleExpanded = it }) {
                     TextField(
-                        readOnly = true,
-                        value = header.getOrElse(titleColumnIndex) { "" },
-                        onValueChange = {},
+                        readOnly = true, value = header.getOrElse(titleColumnIndex) { "" }, onValueChange = {},
                         label = { Text(stringResource(R.string.song_title_column)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTitleExpanded) },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = colorPalette.accent, unfocusedIndicatorColor = colorPalette.textDisabled,
+                            focusedLabelColor = colorPalette.accent, unfocusedLabelColor = colorPalette.textSecondary,
+                            focusedTextColor = colorPalette.text, unfocusedTextColor = colorPalette.text,
+                        ),
                         modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
-                        expanded = isTitleExpanded,
-                        onDismissRequest = { isTitleExpanded = false }
-                    ) {
+                    ExposedDropdownMenu(expanded = isTitleExpanded, onDismissRequest = { isTitleExpanded = false }, modifier = Modifier.background(colorPalette.background2)) {
                         header.forEachIndexed { index, column ->
-                            DropdownMenuItem(
-                                text = { Text(column) },
-                                onClick = {
-                                    titleColumnIndex = index
-                                    isTitleExpanded = false
-                                }
-                            )
+                            DropdownMenuItem(text = { Text(column, color = colorPalette.text) }, onClick = {
+                                titleColumnIndex = index
+                                isTitleExpanded = false
+                            })
                         }
                     }
                 }
 
-                ExposedDropdownMenuBox(
-                    expanded = isArtistExpanded,
-                    onExpandedChange = { isArtistExpanded = it }
-                ) {
+                ExposedDropdownMenuBox(expanded = isArtistExpanded, onExpandedChange = { isArtistExpanded = it }) {
                     TextField(
-                        readOnly = true,
-                        value = header.getOrElse(artistColumnIndex) { "" },
-                        onValueChange = {},
+                        readOnly = true, value = header.getOrElse(artistColumnIndex) { "" }, onValueChange = {},
                         label = { Text(stringResource(R.string.artist_name_column)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isArtistExpanded) },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = colorPalette.accent, unfocusedIndicatorColor = colorPalette.textDisabled,
+                            focusedLabelColor = colorPalette.accent, unfocusedLabelColor = colorPalette.textSecondary,
+                            focusedTextColor = colorPalette.text, unfocusedTextColor = colorPalette.text,
+                        ),
                         modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
-                    ExposedDropdownMenu(
-                        expanded = isArtistExpanded,
-                        onDismissRequest = { isArtistExpanded = false }
-                    ) {
+                    ExposedDropdownMenu(expanded = isArtistExpanded, onDismissRequest = { isArtistExpanded = false }, modifier = Modifier.background(colorPalette.background2)) {
                         header.forEachIndexed { index, column ->
-                            DropdownMenuItem(
-                                text = { Text(column) },
-                                onClick = {
-                                    artistColumnIndex = index
-                                    isArtistExpanded = false
-                                }
-                            )
+                            DropdownMenuItem(text = { Text(column, color = colorPalette.text) }, onClick = {
+                                artistColumnIndex = index
+                                isArtistExpanded = false
+                            })
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                // New dropdown for Album Column (Optional)
+                ExposedDropdownMenuBox(expanded = isAlbumExpanded, onExpandedChange = { isAlbumExpanded = it }) {
+                    TextField(
+                        readOnly = true, value = albumColumnIndex?.let { header.getOrNull(it) } ?: "None", onValueChange = {},
+                        label = { Text("Album Name Column (Optional)") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isAlbumExpanded) },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = colorPalette.accent, unfocusedIndicatorColor = colorPalette.textDisabled,
+                            focusedLabelColor = colorPalette.accent, unfocusedLabelColor = colorPalette.textSecondary,
+                            focusedTextColor = colorPalette.text, unfocusedTextColor = colorPalette.text,
+                        ),
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(expanded = isAlbumExpanded, onDismissRequest = { isAlbumExpanded = false }, modifier = Modifier.background(colorPalette.background2)) {
+                        DropdownMenuItem(text = { Text("None", color = colorPalette.text) }, onClick = {
+                            albumColumnIndex = null
+                            isAlbumExpanded = false
+                        })
+                        header.forEachIndexed { index, column ->
+                            DropdownMenuItem(text = { Text(column, color = colorPalette.text) }, onClick = {
+                                albumColumnIndex = index
+                                isAlbumExpanded = false
+                            })
+                        }
+                    }
+                }
 
+
+                Spacer(modifier = Modifier.height(8.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    DialogTextButton(
-                        text = stringResource(R.string.cancel),
-                        onClick = { showingColumnMappingDialog = null },
-                        modifier = Modifier.align(Alignment.CenterStart)
-                    )
-                    DialogTextButton(
-                        text = stringResource(R.string.next),
-                        onClick = {
-                            coroutineScope.launch {
-                                context.contentResolver.openInputStream(uri)?.let { inputStream ->
-                                    val parser = CsvPlaylistParser()
-                                    val songList = parser.parse(inputStream, titleColumnIndex, artistColumnIndex)
-                                    showingNameDialog = songList
-                                    showingColumnMappingDialog = null
-                                }
+                    DialogTextButton(text = stringResource(R.string.cancel), onClick = { showingColumnMappingDialog = null }, modifier = Modifier.align(Alignment.CenterStart))
+                    DialogTextButton(text = stringResource(R.string.next), onClick = {
+                        coroutineScope.launch {
+                            context.contentResolver.openInputStream(uri)?.let { inputStream ->
+                                val parser = CsvPlaylistParser()
+                                val songList = parser.parse(inputStream, titleColumnIndex, artistColumnIndex, albumColumnIndex)
+                                showingNameDialog = songList
+                                showingColumnMappingDialog = null
                             }
-                        },
-                        modifier = Modifier.align(Alignment.CenterEnd)
-                    )
+                        }
+                    }, modifier = Modifier.align(Alignment.CenterEnd))
                 }
             }
         }
@@ -186,27 +210,15 @@ fun SyncSettings(
     if (showingNameDialog != null) {
         DefaultDialog(onDismiss = { showingNameDialog = null }) {
             var playlistName by remember { mutableStateOf("") }
-            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
-                Text(
-                    text = stringResource(R.string.name_your_playlist_title),
-                    style = typography.m.semiBold,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                TextField(
-                    value = playlistName,
-                    onValueChange = { playlistName = it },
-                    hintText = stringResource(R.string.playlist_name_hint)
-                )
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .padding(all = 24.dp)) {
+                Text(text = stringResource(R.string.name_your_playlist_title), style = typography.m.semiBold, modifier = Modifier.padding(bottom = 16.dp))
+                TextField(value = playlistName, onValueChange = { playlistName = it }, hintText = stringResource(R.string.playlist_name_hint))
                 Spacer(modifier = Modifier.height(24.dp))
                 Box(modifier = Modifier.fillMaxWidth()) {
-                    DialogTextButton(
-                        text = stringResource(R.string.cancel),
-                        onClick = { showingNameDialog = null },
-                        modifier = Modifier.align(Alignment.CenterStart)
-                    )
-                    DialogTextButton(
-                        text = stringResource(R.string.create_playlist_button),
-                        enabled = playlistName.isNotBlank(),
+                    DialogTextButton(text = stringResource(R.string.cancel), onClick = { showingNameDialog = null }, modifier = Modifier.align(Alignment.CenterStart))
+                    Button(
                         onClick = {
                             showingImportDialog = true
                             val songList = showingNameDialog ?: emptyList()
@@ -223,8 +235,16 @@ fun SyncSettings(
                                 )
                             }
                         },
+                        enabled = playlistName.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colorPalette.accent, contentColor = colorPalette.text,
+                            disabledContainerColor = Color.Transparent, disabledContentColor = colorPalette.textDisabled
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(0.dp),
                         modifier = Modifier.align(Alignment.CenterEnd)
-                    )
+                    ) {
+                        Text(stringResource(R.string.create_playlist_button))
+                    }
                 }
             }
         }
@@ -237,51 +257,53 @@ fun SyncSettings(
                 showingImportDialog = false
             }
         }) {
-            Column(modifier = Modifier.fillMaxWidth().padding(all = 24.dp)) {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .padding(all = 24.dp)) {
                 val title = when (importStatus) {
                     is ImportStatus.InProgress -> stringResource(R.string.import_title_in_progress)
                     is ImportStatus.Complete -> stringResource(R.string.import_title_complete)
                     is ImportStatus.Error -> stringResource(R.string.import_title_failed)
                     is ImportStatus.Idle -> stringResource(R.string.import_title_starting)
                 }
-                Text(text = title, style = typography.m.semiBold)
+                Text(text = title, style = typography.m.semiBold, color = colorPalette.text)
                 Spacer(modifier = Modifier.height(16.dp))
+
                 when (val status = importStatus) {
                     is ImportStatus.InProgress -> {
-                        val progress by animateFloatAsState(
-                            targetValue = if (status.total > 0) status.processed.toFloat() / status.total else 0f,
-                            label = "ImportProgress"
-                        )
-                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                        val progress by animateFloatAsState(targetValue = if (status.total > 0) status.processed.toFloat() / status.total else 0f, label = "ImportProgress")
+                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = colorPalette.accent, trackColor = colorPalette.accent.copy(alpha = 0.3f))
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.import_progress, status.processed, status.total),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                        Text(text = stringResource(R.string.import_progress, status.processed, status.total), style = typography.s, color = colorPalette.textSecondary)
                     }
                     is ImportStatus.Complete -> {
-                        Text(stringResource(R.string.import_complete_summary, status.imported, status.total))
-                        if (status.failed > 0) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(stringResource(R.string.import_failed_summary, status.failed))
+                        Text(text = stringResource(R.string.import_complete_summary, status.imported, status.total), style = typography.s, color = colorPalette.text)
+                        if (status.failedTracks.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(text = stringResource(R.string.import_title_failed), style = typography.s.semiBold, color = colorPalette.text)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).border(1.dp, colorPalette.background2, RoundedCornerShape(8.dp))) {
+                                items(status.failedTracks) { failedTrack ->
+                                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                                        Text(text = failedTrack.title, style = typography.s, color = colorPalette.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(text = failedTrack.artist, style = typography.xs, color = colorPalette.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    }
+                                }
+                            }
                         }
                     }
-                    is ImportStatus.Error -> Text(stringResource(R.string.import_error_message, status.message), color = MaterialTheme.colorScheme.error)
+                    is ImportStatus.Error -> Text(text = stringResource(R.string.import_error_message, status.message), color = colorPalette.red, style = typography.s)
                     is ImportStatus.Idle -> {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = colorPalette.accent)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(stringResource(R.string.import_initializing))
+                        Text(text = stringResource(R.string.import_initializing), style = typography.s, color = colorPalette.textSecondary)
                     }
                 }
 
                 if (importStatus !is ImportStatus.InProgress) {
                     Spacer(modifier = Modifier.height(24.dp))
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        DialogTextButton(
-                            text = stringResource(R.string.dialog_ok),
-                            onClick = { showingImportDialog = false },
-                            modifier = Modifier.align(Alignment.CenterEnd)
-                        )
+                        DialogTextButton(text = stringResource(R.string.dialog_ok), onClick = { showingImportDialog = false }, modifier = Modifier.align(Alignment.CenterEnd))
                     }
                 }
             }

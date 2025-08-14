@@ -204,8 +204,10 @@ fun PlaylistSongList(
                         PlaylistInfo(playlist = playlistPage)
                     }
                 }
-
-                itemsIndexed(items = playlistPage?.songsPage?.items ?: emptyList()) { index, song ->
+                itemsIndexed(
+                    items = playlistPage?.songsPage?.items ?: emptyList(),
+                    key = { index, song -> "${song.key}-$index" }
+                ) { index, song ->
                     SongItem(
                         song = song,
                         thumbnailSize = Dimensions.thumbnails.song,

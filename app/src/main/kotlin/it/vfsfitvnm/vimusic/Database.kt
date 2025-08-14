@@ -213,9 +213,9 @@ interface Database {
         SELECT Song.* FROM Event
         JOIN Song ON Song.id = Event.songId
         WHERE Event.ROWID in (
-	        SELECT max(Event.ROWID)
-	        FROM Event
-	        GROUP BY songId
+            SELECT max(Event.ROWID)
+            FROM Event
+            GROUP BY songId
         )
         ORDER BY timestamp DESC
         LIMIT :size
@@ -339,12 +339,11 @@ interface Database {
     @Query("SELECT * FROM Playlist WHERE id = :id")
     fun playlist(id: Long): Flow<Playlist?>
 
-    // TODO: apparently this is an edge-case now?
     @RewriteQueriesToDropUnusedColumns
     @Transaction
     @Query(
         """
-        SELECT * FROM SortedSongPlaylistMap
+        SELECT Song.* FROM SortedSongPlaylistMap
         INNER JOIN Song on Song.id = SortedSongPlaylistMap.songId
         WHERE playlistId = :id
         ORDER BY SortedSongPlaylistMap.position
@@ -359,7 +358,10 @@ interface Database {
     @Transaction
     @Query(
         """
-        SELECT id, name, (SELECT COUNT(*) FROM SongPlaylistMap WHERE playlistId = id) as songCount, thumbnail FROM Playlist
+        SELECT Playlist.id, Playlist.name, COUNT(SongPlaylistMap.songId) as songCount, Playlist.thumbnail
+        FROM Playlist
+        LEFT JOIN SongPlaylistMap ON Playlist.id = SongPlaylistMap.playlistId
+        GROUP BY Playlist.id
         ORDER BY name COLLATE NOCASE ASC
         """
     )
@@ -368,8 +370,11 @@ interface Database {
     @Transaction
     @Query(
         """
-        SELECT id, name, (SELECT COUNT(*) FROM SongPlaylistMap WHERE playlistId = id) as songCount, thumbnail FROM Playlist
-        ORDER BY ROWID ASC
+        SELECT Playlist.id, Playlist.name, COUNT(SongPlaylistMap.songId) as songCount, Playlist.thumbnail
+        FROM Playlist
+        LEFT JOIN SongPlaylistMap ON Playlist.id = SongPlaylistMap.playlistId
+        GROUP BY Playlist.id
+        ORDER BY Playlist.ROWID ASC
         """
     )
     fun playlistPreviewsByDateAddedAsc(): Flow<List<PlaylistPreview>>
@@ -377,7 +382,10 @@ interface Database {
     @Transaction
     @Query(
         """
-        SELECT id, name, (SELECT COUNT(*) FROM SongPlaylistMap WHERE playlistId = id) as songCount, thumbnail FROM Playlist
+        SELECT Playlist.id, Playlist.name, COUNT(SongPlaylistMap.songId) as songCount, Playlist.thumbnail
+        FROM Playlist
+        LEFT JOIN SongPlaylistMap ON Playlist.id = SongPlaylistMap.playlistId
+        GROUP BY Playlist.id
         ORDER BY songCount ASC
         """
     )
@@ -386,7 +394,10 @@ interface Database {
     @Transaction
     @Query(
         """
-        SELECT id, name, (SELECT COUNT(*) FROM SongPlaylistMap WHERE playlistId = id) as songCount, thumbnail FROM Playlist
+        SELECT Playlist.id, Playlist.name, COUNT(SongPlaylistMap.songId) as songCount, Playlist.thumbnail
+        FROM Playlist
+        LEFT JOIN SongPlaylistMap ON Playlist.id = SongPlaylistMap.playlistId
+        GROUP BY Playlist.id
         ORDER BY name COLLATE NOCASE DESC
         """
     )
@@ -395,8 +406,11 @@ interface Database {
     @Transaction
     @Query(
         """
-        SELECT id, name, (SELECT COUNT(*) FROM SongPlaylistMap WHERE playlistId = id) as songCount, thumbnail FROM Playlist
-        ORDER BY ROWID DESC
+        SELECT Playlist.id, Playlist.name, COUNT(SongPlaylistMap.songId) as songCount, Playlist.thumbnail
+        FROM Playlist
+        LEFT JOIN SongPlaylistMap ON Playlist.id = SongPlaylistMap.playlistId
+        GROUP BY Playlist.id
+        ORDER BY Playlist.ROWID DESC
         """
     )
     fun playlistPreviewsByDateAddedDesc(): Flow<List<PlaylistPreview>>
@@ -404,7 +418,10 @@ interface Database {
     @Transaction
     @Query(
         """
-        SELECT id, name, (SELECT COUNT(*) FROM SongPlaylistMap WHERE playlistId = id) as songCount, thumbnail FROM Playlist
+        SELECT Playlist.id, Playlist.name, COUNT(SongPlaylistMap.songId) as songCount, Playlist.thumbnail
+        FROM Playlist
+        LEFT JOIN SongPlaylistMap ON Playlist.id = SongPlaylistMap.playlistId
+        GROUP BY Playlist.id
         ORDER BY songCount DESC
         """
     )
@@ -433,7 +450,7 @@ interface Database {
     @Query(
         """
         SELECT thumbnailUrl FROM Song
-        JOIN SongPlaylistMap ON id = songId
+        JOIN SongPlaylistMap ON Song.id = SongPlaylistMap.songId
         WHERE playlistId = :id
         ORDER BY position
         LIMIT 4
@@ -578,6 +595,18 @@ interface Database {
         """
     )
     fun move(playlistId: Long, fromPosition: Int, toPosition: Int)
+
+    @Transaction
+    fun removeFromPlaylist(playlistId: Long, positionInPlaylist: Int) {
+        deleteFromPlaylistAtPosition(playlistId, positionInPlaylist)
+        updatePositionsAfterDelete(playlistId, positionInPlaylist)
+    }
+
+    @Query("DELETE FROM SongPlaylistMap WHERE playlistId = :playlistId AND position = :position")
+    fun deleteFromPlaylistAtPosition(playlistId: Long, position: Int)
+
+    @Query("UPDATE SongPlaylistMap SET position = position - 1 WHERE playlistId = :playlistId AND position > :position")
+    fun updatePositionsAfterDelete(playlistId: Long, position: Int)
 
     @Query("DELETE FROM SongPlaylistMap WHERE playlistId = :id")
     fun clearPlaylist(id: Long)
@@ -785,7 +814,7 @@ interface Database {
         PipedSession::class
     ],
     views = [SortedSongPlaylistMap::class],
-    version = 30,
+    version = 32,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -834,7 +863,9 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
                 From10To11Migration(),
                 From14To15Migration(),
                 From22To23Migration(),
-                From23To24Migration()
+                From23To24Migration(),
+                From30To31Migration(),
+                From31To32Migration()
             )
             .build()
 
@@ -1079,6 +1110,40 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
     class From23To24Migration : Migration(23, 24) {
         override fun migrate(db: SupportSQLiteDatabase) =
             db.execSQL("ALTER TABLE Song ADD COLUMN loudnessBoost REAL")
+    }
+
+    class From30To31Migration : Migration(30, 31) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE Song ADD COLUMN album TEXT")
+        }
+    }
+
+    class From31To32Migration : Migration(31, 32) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Create a new table with the correct schema
+            db.execSQL("""
+                CREATE TABLE SongPlaylistMap_new (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `songId` TEXT NOT NULL,
+                    `playlistId` INTEGER NOT NULL,
+                    `position` INTEGER NOT NULL,
+                    FOREIGN KEY(`songId`) REFERENCES `Song`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(`playlistId`) REFERENCES `Playlist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """.trimIndent())
+            // Copy the data from the old table to the new one
+            db.execSQL("""
+                INSERT INTO SongPlaylistMap_new (songId, playlistId, position)
+                SELECT songId, playlistId, position FROM SongPlaylistMap
+            """.trimIndent())
+            // Remove the old table
+            db.execSQL("DROP TABLE SongPlaylistMap")
+            // Rename the new table to the original name
+            db.execSQL("ALTER TABLE SongPlaylistMap_new RENAME TO SongPlaylistMap")
+            // Re-create indices for performance
+            db.execSQL("CREATE INDEX `index_SongPlaylistMap_songId` ON `SongPlaylistMap` (`songId`)")
+            db.execSQL("CREATE INDEX `index_SongPlaylistMap_playlistId` ON `SongPlaylistMap` (`playlistId`)")
+        }
     }
 }
 

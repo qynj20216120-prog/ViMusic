@@ -14,23 +14,46 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.firstOrNull
+import kotlin.math.max
+import kotlin.math.min
 
-// A simple, universal data class for any song from any source
 data class SongImportInfo(
     val title: String,
     val artist: String,
+    val album: String?
 )
 
-// The generic status class remains the same
 sealed class ImportStatus {
     data object Idle : ImportStatus()
     data class InProgress(val processed: Int, val total: Int) : ImportStatus()
-    data class Complete(val imported: Int, val failed: Int, val total: Int) : ImportStatus()
+    data class Complete(val imported: Int, val failed: Int, val total: Int, val failedTracks: List<SongImportInfo>) : ImportStatus()
     data class Error(val message: String) : ImportStatus()
 }
 
 class PlaylistImporter {
+    private data class ProcessedSongInfo(
+        val baseTitle: String,
+        val primaryArtist: String,
+        val allArtists: List<String>,
+        val modifiers: Set<String>,
+        val album: String?
+    )
+
+    companion object {
+        private const val MINIMUM_SCORE_THRESHOLD = 50
+        private const val PRIMARY_ARTIST_EXACT_MATCH_BONUS = 40
+        private const val OTHER_ARTIST_MATCH_BONUS = 10
+        private const val TITLE_SIMILARITY_WEIGHT = 50
+        private const val ALBUM_MATCH_BONUS = 30
+        private const val MODIFIER_MATCH_BONUS = 25
+        private const val MODIFIER_MISMATCH_PENALTY = 40
+        private val KNOWN_MODIFIERS = setOf(
+            "remix", "edit", "mix", "live", "cover", "instrumental", "karaoke",
+            "acoustic", "unplugged", "reverb", "slowed", "sped up", "chopped", "screwed",
+            "deluxe", "version", "edition", "ultra"
+        )
+    }
+
     suspend fun import(
         songList: List<SongImportInfo>,
         playlistName: String,
@@ -39,34 +62,23 @@ class PlaylistImporter {
     ) {
         try {
             val totalTracks = songList.size
-            Log.d("PlaylistImporter", "Starting import for $totalTracks tracks.")
-
             val songsToAdd = mutableListOf<Song>()
+            val failedTracks = mutableListOf<SongImportInfo>()
             var processedCount = 0
 
             onProgressUpdate(ImportStatus.InProgress(processed = 0, total = totalTracks))
 
-            val batchSize = 15
-            songList.chunked(batchSize).forEachIndexed { index, batch ->
-                Log.d("PlaylistImporter", "Processing batch ${index + 1}...")
+            val batchSize = 10
+            songList.chunked(batchSize).forEach { batch ->
                 coroutineScope {
                     val deferredSongsInBatch = batch.map { track ->
                         async(Dispatchers.IO) {
-                            val searchQuery = "${track.title} ${track.artist}"
-                            val localSong = Database.instance.search("%${track.title}%").firstOrNull()?.firstOrNull { song ->
-                                song.artistsText?.contains(track.artist, ignoreCase = true) == true
-                            }
-
-                            if (localSong != null) {
-                                return@async localSong
-                            }
+                            val searchQuery = "${track.title} ${track.artist} ${track.album ?: ""}"
 
                             val searchCandidates = Innertube.searchPage(
                                 body = SearchBody(query = searchQuery, params = Innertube.SearchFilter.Song.value)
                             ) { content ->
-                                content.musicResponsiveListItemRenderer?.let { renderer ->
-                                    Innertube.SongItem.from(renderer)
-                                }
+                                content.musicResponsiveListItemRenderer?.let(Innertube.SongItem::from)
                             }?.getOrNull()?.items
 
                             if (searchCandidates.isNullOrEmpty()) {
@@ -74,49 +86,57 @@ class PlaylistImporter {
                             }
 
                             val bestMatch = findBestMatchInResults(track, searchCandidates)
-                            if (bestMatch != null) {
+                            bestMatch?.let {
                                 Song(
-                                    id = bestMatch.info?.endpoint?.videoId ?: "",
-                                    title = bestMatch.info?.name ?: "",
-                                    artistsText = bestMatch.authors?.joinToString { it.name.toString() },
-                                    durationText = bestMatch.durationText,
-                                    thumbnailUrl = bestMatch.thumbnail?.url
-                                ).takeIf { it.id.isNotEmpty() }
-                            } else {
-                                Log.w("PlaylistImporter", "No suitable match found for \"$searchQuery\"")
-                                null
+                                    id = it.info?.endpoint?.videoId ?: "",
+                                    title = it.info?.name ?: "",
+                                    artistsText = it.authors?.joinToString { author -> author.name.toString() } ?: "",
+                                    durationText = it.durationText,
+                                    thumbnailUrl = it.thumbnail?.url,
+                                    album = it.album?.name
+                                )
                             }
                         }
                     }
-                    songsToAdd.addAll(deferredSongsInBatch.awaitAll().filterNotNull())
+                    val results = deferredSongsInBatch.awaitAll()
+                    batch.zip(results).forEach { (originalTrack, resultingSong) ->
+                        if (resultingSong != null && resultingSong.id.isNotBlank()) {
+                            songsToAdd.add(resultingSong)
+                        } else {
+                            failedTracks.add(originalTrack)
+                        }
+                    }
                 }
 
                 processedCount += batch.size
-                Log.d("PlaylistImporter", "Batch ${index + 1} complete. Total songs found: ${songsToAdd.size}")
                 onProgressUpdate(ImportStatus.InProgress(processed = processedCount, total = totalTracks))
             }
 
-            Log.d("PlaylistImporter", "All batches complete. Found ${songsToAdd.size} total songs to import.")
-
-            transaction {
-                val newPlaylist = Playlist(name = playlistName)
-                val newPlaylistId = Database.instance.insert(newPlaylist)
-                if (newPlaylistId != -1L) {
-                    songsToAdd.forEachIndexed { index, song ->
-                        Database.instance.insert(song)
-                        Database.instance.insert(
-                            SongPlaylistMap(
-                                songId = song.id,
-                                playlistId = newPlaylistId,
-                                position = index
+            if (songsToAdd.isNotEmpty()) {
+                transaction {
+                    val newPlaylist = Playlist(name = playlistName)
+                    val newPlaylistId = Database.instance.insert(newPlaylist)
+                    if (newPlaylistId != -1L) {
+                        songsToAdd.forEachIndexed { index, song ->
+                            Database.instance.insert(song)
+                            Database.instance.insert(
+                                SongPlaylistMap(
+                                    songId = song.id,
+                                    playlistId = newPlaylistId,
+                                    position = index
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
 
-            val failedCount = totalTracks - songsToAdd.size
-            onProgressUpdate(ImportStatus.Complete(imported = songsToAdd.size, failed = failedCount, total = totalTracks))
+            onProgressUpdate(ImportStatus.Complete(
+                imported = songsToAdd.size,
+                failed = failedTracks.size,
+                total = totalTracks,
+                failedTracks = failedTracks
+            ))
 
         } catch (e: Exception) {
             Log.e("PlaylistImporter", "An error occurred during the import process.", e)
@@ -125,39 +145,95 @@ class PlaylistImporter {
     }
 
     private fun findBestMatchInResults(importTrack: SongImportInfo, candidates: List<Innertube.SongItem>): Innertube.SongItem? {
+        val importInfo = parseSongInfo(importTrack.title, importTrack.artist, importTrack.album)
+
         val scoredCandidates = candidates.map { candidate ->
-            candidate to calculateMatchScore(importTrack, candidate)
+            val candidateTitle = candidate.info?.name ?: ""
+            val candidateArtists = candidate.authors?.joinToString { it.name.toString() } ?: ""
+            val candidateAlbum = candidate.album?.name
+            val candidateInfo = parseSongInfo(candidateTitle, candidateArtists, candidateAlbum)
+            val score = calculateMatchScore(importInfo, candidateInfo, candidateAlbum)
+            candidate to score
         }
 
         return scoredCandidates
-            .filter { (_, score) -> score > 0 }
+            .filter { (_, score) -> score > MINIMUM_SCORE_THRESHOLD }
             .maxByOrNull { (_, score) -> score }
             ?.first
     }
 
-    private fun calculateMatchScore(importTrack: SongImportInfo, candidate: Innertube.SongItem): Int {
-        val candidateTitle = candidate.info?.name?.lowercase() ?: return 0
-        val candidateArtists = candidate.authors?.joinToString { it.name.toString() }?.lowercase() ?: ""
-        val primaryImportArtist = importTrack.artist.split(",")[0].trim().lowercase()
+    private fun parseSongInfo(title: String, artists: String, album: String?): ProcessedSongInfo {
+        val normalizedTitle = title.lowercase()
+        val modifierRegex = """[(\[].*?[)\]]|-.*""".toRegex()
+        val foundModifiers = modifierRegex.findAll(normalizedTitle)
+            .map { it.value.replace(Regex("[\\[\\]()\\-]"), "").trim() }
+            .flatMap { it.split(" ") }
+            .map { it.trim() }
+            .filter { word -> KNOWN_MODIFIERS.any { modifier -> word.contains(modifier) } }
+            .toSet()
 
-        if (!candidateArtists.contains(primaryImportArtist)) {
-            return 0
+        val baseTitle = modifierRegex.replace(normalizedTitle, "").trim()
+        val allArtists = artists.lowercase().split(Regex(",|&|feat\\.?|ft\\.?|with")).map { it.trim() }.filter { it.isNotEmpty() }
+
+        return ProcessedSongInfo(baseTitle, allArtists.firstOrNull() ?: "", allArtists, foundModifiers, album?.lowercase()?.trim())
+    }
+
+    private fun calculateMatchScore(importInfo: ProcessedSongInfo, candidateInfo: ProcessedSongInfo, candidateAlbumName: String?): Int {
+        var score = 0
+
+        if (importInfo.primaryArtist.isNotEmpty() && candidateInfo.allArtists.any { it.contains(importInfo.primaryArtist) }) {
+            score += PRIMARY_ARTIST_EXACT_MATCH_BONUS
+        }
+        val otherImportArtists = importInfo.allArtists.drop(1)
+        score += otherImportArtists.count { importArtist ->
+            candidateInfo.allArtists.any { candidateArtist -> candidateArtist.contains(importArtist) }
+        } * OTHER_ARTIST_MATCH_BONUS
+        if (score == 0) return 0
+
+        val titleDistance = levenshtein(importInfo.baseTitle, candidateInfo.baseTitle)
+        val maxLen = max(importInfo.baseTitle.length, candidateInfo.baseTitle.length)
+        if (maxLen > 0) {
+            score += ((1.0 - titleDistance.toDouble() / maxLen) * TITLE_SIMILARITY_WEIGHT).toInt()
         }
 
-        val badKeywords = listOf("cover", "remix", "live", "instrumental", "karaoke", "reaction", "lyrics", "unplugged", "acoustic", "reverb", "slowed")
-        if (badKeywords.any { candidateTitle.contains(it) }) {
-            return 0
+        importInfo.album?.let { importAlbum ->
+            candidateAlbumName?.lowercase()?.let { candidateAlbum ->
+                if (candidateAlbum.contains(importAlbum)) {
+                    score += ALBUM_MATCH_BONUS
+                }
+            }
         }
 
-        val cleanedImportTitle = importTrack.title.substringBefore(" (").substringBefore(" -").trim().lowercase()
-        if (!candidateTitle.contains(cleanedImportTitle)) {
-            return 0
+        if (importInfo.modifiers.isNotEmpty() && importInfo.modifiers == candidateInfo.modifiers) {
+            score += MODIFIER_MATCH_BONUS * importInfo.modifiers.size
+        } else if (importInfo.modifiers.isEmpty() && candidateInfo.modifiers.isNotEmpty()) {
+            score -= MODIFIER_MISMATCH_PENALTY
+        } else if (importInfo.modifiers.isNotEmpty() && candidateInfo.modifiers.isEmpty()) {
+            score -= MODIFIER_MISMATCH_PENALTY / 2
         }
 
-        var score = 100
-        val lengthDifference = candidateTitle.length - cleanedImportTitle.length
-        score -= lengthDifference
-        if (candidateTitle == cleanedImportTitle) score += 10
         return score
+    }
+
+    private fun levenshtein(lhs: CharSequence, rhs: CharSequence): Int {
+        val lhsLength = lhs.length
+        val rhsLength = rhs.length
+        var cost = IntArray(lhsLength + 1) { it }
+        var newCost = IntArray(lhsLength + 1)
+
+        for (i in 1..rhsLength) {
+            newCost[0] = i
+            for (j in 1..lhsLength) {
+                val match = if (lhs[j - 1] == rhs[i - 1]) 0 else 1
+                val costReplace = cost[j - 1] + match
+                val costInsert = cost[j] + 1
+                val costDelete = newCost[j - 1] + 1
+                newCost[j] = min(min(costInsert, costDelete), costReplace)
+            }
+            val swap = cost
+            cost = newCost
+            newCost = swap
+        }
+        return cost[lhsLength]
     }
 }
