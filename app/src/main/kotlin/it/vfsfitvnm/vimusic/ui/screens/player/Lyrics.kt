@@ -371,8 +371,7 @@ fun Lyrics(
                                         baseUrl = BuildConfig.LYRICS_API_BASE,
                                         title = title,
                                         artist = artist,
-                                        album = album,
-                                        duration = duration.toInt()
+                                        album = album
                                     )
                                 } catch (e: Exception) {
                                     e.printStackTrace()

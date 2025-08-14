@@ -1,16 +1,18 @@
+@file:Suppress("JSON_FORMAT_REDUNDANT")
+
 package it.vfsfitvnm.providers.lyricsplus
 
 import it.vfsfitvnm.providers.lyricsplus.models.LyricLine
 import it.vfsfitvnm.providers.lyricsplus.models.LyricWord
 import it.vfsfitvnm.providers.lyricsplus.models.LyricsResponse
 import io.ktor.client.*
+import io.ktor.client.plugins.ClientRequestException
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
-
-private val json = Json { ignoreUnknownKeys = true }
 
 object LyricsPlus {
     private val client = HttpClient {
@@ -24,42 +26,59 @@ object LyricsPlus {
         title: String,
         artist: String,
         album: String? = null,
-        duration: Int? = null
     ): List<LyricLine>? {
         val url = "$baseUrl/v2/lyrics/get"
 
-
         return try {
-            val response: HttpResponse = client.get(url) {
-                parameter("title", title)
-                parameter("artist", artist)
-                parameter("album", album)
-                parameter("duration", duration)
+            // First attempt: Request lyrics with the album
+            makeLyricsRequest(url, title, artist, album)
+        } catch (e: ClientRequestException) {
+            // If it fails with a 404 and an album was provided, try again without it
+            if (e.response.status == HttpStatusCode.NotFound && album != null) {
+                try {
+                    // Second attempt: Request lyrics without the album
+                    makeLyricsRequest(url, title, artist, null)
+                } catch (_: Exception) {
+                    null // Return null if the second attempt also fails
+                }
+            } else {
+                null // Return null for other HTTP errors
             }
+        } catch (_: Exception) {
+            null // Return null for any other type of exception (e.g., network issues)
+        }
+    }
 
-            val responseText = response.bodyAsText()
+    private suspend fun makeLyricsRequest(
+        url: String,
+        title: String,
+        artist: String,
+        album: String?
+    ): List<LyricLine> {
+        val response: HttpResponse = client.get(url) {
+            parameter("title", title)
+            parameter("artist", artist)
+            parameter("album", album)
+        }
 
-            val body = Json { ignoreUnknownKeys = true }
-                .decodeFromString<LyricsResponse>(responseText)
+        val responseText = response.bodyAsText()
 
+        val body = Json { ignoreUnknownKeys = true }
+            .decodeFromString<LyricsResponse>(responseText)
 
-            body.lyrics.map { line ->
-                LyricLine(
-                    fullText = line.text,
-                    startTimeMs = line.time,
-                    durationMs = line.duration,
-                    words = line.syllabus.map {
-                        LyricWord(
-                            text = it.text,
-                            startTimeMs = it.time,
-                            durationMs = it.duration
-                        )
-                    }
-                )
-            }
-        } catch (e: Exception) {
-            null
+        return body.lyrics.map { line ->
+            LyricLine(
+                fullText = line.text,
+                startTimeMs = line.time,
+                durationMs = line.duration,
+                words = line.syllabus.map {
+                    LyricWord(
+                        text = it.text,
+                        startTimeMs = it.time,
+                        durationMs = it.duration
+                    )
+                }
+            )
         }
     }
 }
-
