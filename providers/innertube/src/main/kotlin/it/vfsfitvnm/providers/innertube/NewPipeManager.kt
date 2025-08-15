@@ -8,6 +8,7 @@ import org.schabi.newpipe.extractor.downloader.Request
 import org.schabi.newpipe.extractor.downloader.Response
 import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.services.youtube.YoutubeJavaScriptPlayerManager
+import org.schabi.newpipe.extractor.downloader.CancellableCall
 import java.io.IOException
 
 private class NewPipeDownloaderImpl : Downloader() {
@@ -35,7 +36,11 @@ private class NewPipeDownloaderImpl : Downloader() {
 
         val responseBodyToReturn = response.body?.string()
         val latestUrl = response.request.url.toString()
-        return Response(response.code, response.message, response.headers.toMultimap(), responseBodyToReturn, latestUrl)
+        return Response(response.code, response.message, response.headers.toMultimap(), responseBodyToReturn, responseBodyToReturn?.toByteArray(), latestUrl)
+    }
+
+    override fun executeAsync(request: Request, callback: AsyncCallback?): CancellableCall {
+        TODO("Placeholder")
     }
 }
 
