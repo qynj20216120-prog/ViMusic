@@ -36,11 +36,13 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -135,7 +137,7 @@ private fun isWordLevelJson(text: String?): Boolean {
 private fun isLrcFormat(text: String?): Boolean {
     if (text.isNullOrBlank()) return false
     // A simple but effective heuristic: check for the presence of a timestamp tag.
-    return text.contains(Regex("\\[\\d{2}:\\d{2}[.:]\\d{2,3}\\]"))
+    return text.contains(Regex("\\[\\d{2}:\\d{2}[.:]\\d{2,3}]"))
 }
 
 // Helper function to safely parse word-level lyrics
@@ -250,9 +252,38 @@ fun Lyrics(
 
     var invalidLrc by remember(text) { mutableStateOf(false) }
 
-    var wordSyncedManager by rememberSaveable(mediaId, shouldShowSynchronizedLyrics) {
-        mutableStateOf<LyricsPlusSyncManager?>(null)
+    // This Saver correctly handles the MutableState object, fixing the type mismatch.
+    val lyricsPlusSyncManagerStateSaver = remember(binder) {
+        Saver<MutableState<LyricsPlusSyncManager?>, String>(
+            save = { state ->
+                // Get the value from the state and serialize it to a JSON string
+                state.value?.let { manager -> Json.encodeToString(manager.getLyrics()) } ?: ""
+            },
+            restore = { jsonString ->
+                // Deserialize the string to get the manager object
+                val restoredManager = if (jsonString.isNotBlank()) {
+                    val lyricsList = Json.decodeFromString<List<LyricLine>>(jsonString)
+                    LyricsPlusSyncManager(
+                        lyrics = lyricsList,
+                        positionProvider = { binder?.player?.currentPosition ?: 0L }
+                    )
+                } else {
+                    null
+                }
+                // Restore it back into a new MutableState
+                mutableStateOf(restoredManager)
+            }
+        )
     }
+
+    var wordSyncedManager by rememberSaveable(
+        mediaId,
+        shouldShowSynchronizedLyrics,
+        saver = lyricsPlusSyncManagerStateSaver // Use the state-aware saver
+    ) {
+        mutableStateOf(null)
+    }
+
     var wordSyncedAvailable by rememberSaveable(mediaId, shouldShowSynchronizedLyrics) {
         mutableStateOf(false)
     }
@@ -383,7 +414,7 @@ fun Lyrics(
                                 if (hasActualWords) {
                                     // Got word-level lyrics
                                     wordSyncedAvailable = true
-                                    val nonNullWordLevelLyrics = wordLevelLyrics!!
+                                    val nonNullWordLevelLyrics = wordLevelLyrics
 
                                     val jsonString = try {
                                         Json.encodeToString(nonNullWordLevelLyrics)
