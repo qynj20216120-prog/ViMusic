@@ -7,6 +7,7 @@ import it.vfsfitvnm.providers.innertube.models.Thumbnail
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpResponseValidator
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.ResponseException
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.client.plugins.compression.ContentEncoding
@@ -24,11 +25,13 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.parameters
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import okhttp3.Protocol
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import java.net.Proxy
 
 internal val json = Json {
     ignoreUnknownKeys = true
@@ -37,6 +40,49 @@ internal val json = Json {
 }
 
 object Innertube {
+
+    private var httpClient = createClient()
+    var proxy: Proxy? = null
+        set(value) {
+            field = value
+            httpClient.close()
+            httpClient = createClient()
+        }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    private fun createClient() = HttpClient(OkHttp) {
+        expectSuccess = true
+
+        install(ContentNegotiation) {
+            json(Json {
+                ignoreUnknownKeys = true
+                explicitNulls = false
+                encodeDefaults = true
+            })
+        }
+
+        install(ContentEncoding) {
+            gzip(0.9F)
+            deflate(0.8F)
+        }
+
+        install(HttpTimeout) {
+            requestTimeoutMillis = 15000
+            connectTimeoutMillis = 10000
+            socketTimeoutMillis = 15000
+        }
+
+        if (proxy != null) {
+            engine {
+                proxy = this@Innertube.proxy
+            }
+        }
+
+        defaultRequest {
+            url("https://music.youtube.com/youtubei/v1/")
+        }
+    }
+
     private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
     private val OriginInterceptor = createClientPlugin("OriginInterceptor") {
         client.sendPipeline.intercept(HttpSendPipeline.State) {

@@ -77,7 +77,9 @@ import it.vfsfitvnm.core.ui.utils.songBundle
 import it.vfsfitvnm.core.ui.utils.streamVolumeFlow
 import it.vfsfitvnm.providers.innertube.Innertube
 import it.vfsfitvnm.providers.innertube.InvalidHttpCodeException
+import it.vfsfitvnm.providers.innertube.NewPipeUtils
 import it.vfsfitvnm.providers.innertube.models.NavigationEndpoint
+import it.vfsfitvnm.providers.innertube.models.PlayerResponse
 import it.vfsfitvnm.providers.innertube.models.bodies.PlayerBody
 import it.vfsfitvnm.providers.innertube.models.bodies.SearchBody
 import it.vfsfitvnm.providers.innertube.requests.player
@@ -178,6 +180,15 @@ val Song.isLocal get() = id.startsWith(LOCAL_KEY_PREFIX)
 
 private const val LIKE_ACTION = "LIKE"
 private const val LOOP_ACTION = "LOOP"
+
+internal val PlayerResponse.StreamingData.highestQualityFormat: PlayerResponse.StreamingData.Format?
+    get() = (adaptiveFormats + formats.orEmpty())
+        .filter { it.isAudio }
+        .maxByOrNull { it.bitrate }
+
+internal fun PlayerResponse.StreamingData.Format.findUrl(videoId: String): String? {
+    return NewPipeUtils.getStreamUrl(this, videoId).getOrNull()
+}
 
 @kotlin.OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("LargeClass", "TooManyFunctions") // intended in this class: it is a service

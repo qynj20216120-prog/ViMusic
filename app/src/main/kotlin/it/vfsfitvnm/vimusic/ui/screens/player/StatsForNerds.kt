@@ -46,6 +46,7 @@ import it.vfsfitvnm.core.ui.overlay
 import it.vfsfitvnm.providers.innertube.Innertube
 import it.vfsfitvnm.providers.innertube.models.bodies.PlayerBody
 import it.vfsfitvnm.providers.innertube.requests.player
+import it.vfsfitvnm.vimusic.service.highestQualityFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -97,8 +98,8 @@ fun StatsForNerds(
                                         songId = mediaId,
                                         itag = format.itag,
                                         mimeType = format.mimeType,
-                                        bitrate = format.bitrate,
-                                        loudnessDb = response.playerConfig?.audioConfig?.normalizedLoudnessDb,
+                                        bitrate = format.bitrate.toLong(),
+                                        loudnessDb = response.playerConfig?.audioConfig?.loudnessDb?.toFloat(),
                                         contentLength = format.contentLength,
                                         lastModified = format.lastModified
                                     )
