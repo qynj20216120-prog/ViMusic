@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="format_minutes">%1$d分鐘</string>
     <string name="format_hours">%1$d小時</string>
     <string name="format_days">%1$d天</string>
@@ -215,8 +215,6 @@
     <string name="format_cache_space_used">已使用 %1$s</string>
     <string name="format_cache_space_used_percentage">已使用 %1$s (%2$s%%)</string>
     <string name="song_cache">歌曲快取</string>
-    <string name="pause_song_cache">暫停快取</string>
-    <string name="pause_song_cache_description">暫時暫停將新歌曲新增至快取</string>
     <string name="database">資料庫</string>
     <string name="cleanup">清理</string>
     <string name="pause_playback_history">暫停播放紀錄</string>
@@ -388,15 +386,15 @@
     <string name="unknown_error">發生未知錯誤</string>
     <string name="piped_learn_more_url" translatable="false">https://github.com/TeamPiped/Piped/blob/master/README.md</string>
     <string name="lyrics_cache">歌詞快取</string>
-    <plurals name="format_reset_blacklist_description">
+    <plurals name="format_reset_blacklist_description" tools:ignore="UnusedQuantity">
         <item quantity="one">從黑名單中移除 %1$s 首歌曲</item>
         <item quantity="other">從黑名單中移除所有 %1$s 首歌曲</item>
     </plurals>
-    <plurals name="format_reset_quick_picks_amount">
+    <plurals name="format_reset_quick_picks_amount" tools:ignore="UnusedQuantity">
         <item quantity="one">刪除 %1$s 個播放事件</item>
         <item quantity="other">刪除 %1$s 個播放事件</item>
     </plurals>
-    <plurals name="song_count_plural">
+    <plurals name="song_count_plural" tools:ignore="UnusedQuantity">
         <item quantity="one">%1$d 首歌曲</item>
         <item quantity="other">%1$d 首歌曲</item>
     </plurals>

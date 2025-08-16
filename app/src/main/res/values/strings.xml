@@ -215,8 +215,6 @@
     <string name="format_cache_space_used">%1$s used</string>
     <string name="format_cache_space_used_percentage">%1$s used (%2$s%%)</string>
     <string name="song_cache">Song cache</string>
-    <string name="pause_song_cache">Pause cache</string>
-    <string name="pause_song_cache_description">Temporarily pauses new songs being added to cache</string>
     <string name="database">Database</string>
     <string name="cleanup">Cleanup</string>
     <string name="pause_playback_history">Pause playback history</string>
@@ -386,7 +384,7 @@
     <string name="import_error_message">An error occurred: %1$s</string>
     <string name="import_initializing">Initializing import process…</string>
     <string name="unknown_error">An unknown error occurred</string>
-    <string name="piped_learn_more_url" translatable="false">https://github.com/TeamPiped/Piped/blob/master/README.md</string>
+    <string name="piped_learn_more_url">https://github.com/TeamPiped/Piped/blob/master/README.md</string>
     <string name="lyrics_cache">Lyrics cache</string>
     <plurals name="format_reset_blacklist_description">
         <item quantity="one">Remove %1$s song from the blacklist</item>

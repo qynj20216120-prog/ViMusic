@@ -21,7 +21,6 @@ import coil3.imageLoader
 import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
 import it.vfsfitvnm.vimusic.R
 import it.vfsfitvnm.vimusic.preferences.DataPreferences
-import it.vfsfitvnm.vimusic.preferences.PlayerPreferences
 import it.vfsfitvnm.vimusic.ui.components.themed.LinearProgressIndicator
 import it.vfsfitvnm.vimusic.ui.components.themed.SecondaryTextButton
 import it.vfsfitvnm.vimusic.ui.screens.Route
@@ -159,12 +158,6 @@ fun CacheSettings() = with(DataPreferences) {
                     title = stringResource(R.string.max_size),
                     selectedValue = exoPlayerDiskCacheMaxSize,
                     onValueSelect = { exoPlayerDiskCacheMaxSize = it }
-                )
-                SwitchSettingsEntry(
-                    title = stringResource(R.string.pause_song_cache),
-                    text = stringResource(R.string.pause_song_cache_description),
-                    isChecked = PlayerPreferences.pauseCache,
-                    onCheckedChange = { PlayerPreferences.pauseCache = it }
                 )
             }
         }

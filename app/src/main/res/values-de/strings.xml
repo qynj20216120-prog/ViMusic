@@ -214,8 +214,6 @@
     <string name="format_cache_space_used">%1$s verwendet</string>
     <string name="format_cache_space_used_percentage">%1$s verwendet (%2$s%%)</string>
     <string name="song_cache">Song-Cache</string>
-    <string name="pause_song_cache">Cache pausieren</string>
-    <string name="pause_song_cache_description">Pausiert vorübergehend das Hinzufügen neuer Songs zum Cache</string>
     <string name="database">Datenbank</string>
     <string name="cleanup">Bereinigen</string>
     <string name="pause_playback_history">Pausieren des Wiedergabeverlaufs</string>
@@ -398,5 +396,6 @@
     <string name="import_error_message">Ein Fehler ist aufgetreten: %1$s</string>
     <string name="import_initializing">Importvorgang wird initialisiert …</string>
     <string name="unknown_error">Es ist ein unbekannter Fehler aufgetreten</string>
+    <string name="piped_learn_more_url">https://github.com/TeamPiped/Piped/blob/master/README.md</string>
     <string name="lyrics_cache">Liedtext-Cache</string>
 </resources>

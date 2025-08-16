@@ -121,7 +121,6 @@ import it.vfsfitvnm.vimusic.utils.handleUnknownErrors
 import it.vfsfitvnm.vimusic.utils.intent
 import it.vfsfitvnm.vimusic.utils.mediaItems
 import it.vfsfitvnm.vimusic.utils.progress
-import it.vfsfitvnm.vimusic.utils.readOnlyWhen
 import it.vfsfitvnm.vimusic.utils.retryIf
 import it.vfsfitvnm.vimusic.utils.setPlaybackPitch
 import it.vfsfitvnm.vimusic.utils.shouldBePlaying
@@ -1340,7 +1339,7 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
             uriCache: UriCache<String, Long?> = UriCache()
         ): DataSource.Factory = ResolvingDataSource.Factory(
             ConditionalCacheDataSourceFactory(
-                cacheDataSourceFactory = cache.readOnlyWhen { PlayerPreferences.pauseCache }.asDataSource,
+                cacheDataSourceFactory = cache.asDataSource,
                 upstreamDataSourceFactory = context.defaultDataSource,
                 shouldCache = { !it.isLocal }
             )

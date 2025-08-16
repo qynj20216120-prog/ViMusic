@@ -54,8 +54,6 @@ object PlayerPreferences : GlobalPreferencesHolder() {
     var skipOnError by boolean(false)
     var handleAudioFocus by boolean(true)
 
-    var pauseCache by boolean(false)
-
     val sponsorBlockEnabledProperty = boolean(false)
     var sponsorBlockEnabled by sponsorBlockEnabledProperty
 

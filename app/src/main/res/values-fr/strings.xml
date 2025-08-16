@@ -215,8 +215,6 @@
     <string name="format_cache_space_used">%1$s utilisés</string>
     <string name="format_cache_space_used_percentage">%1$s utilisés (%2$s%%)</string>
     <string name="song_cache">Cache des titres</string>
-    <string name="pause_song_cache">Cache de mise en pause</string>
-    <string name="pause_song_cache_description">Suspend temporairement l\'ajout de nouveaux titres au cache</string>
     <string name="database">Base de données</string>
     <string name="cleanup">Nettoyage</string>
     <string name="pause_playback_history">Mettre en pause l\'historique de lecture</string>
