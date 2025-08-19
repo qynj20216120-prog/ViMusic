@@ -645,6 +645,9 @@ interface Database {
         updatePositionsAfterDelete(playlistId, positionInPlaylist)
     }
 
+    @Query("SELECT position FROM SongPlaylistMap WHERE songId = :songId AND playlistId = :playlistId LIMIT 1")
+    fun getPositionInPlaylist(songId: String, playlistId: Long): Int?
+
     @Query("DELETE FROM SongPlaylistMap WHERE playlistId = :playlistId AND position = :position")
     fun deleteFromPlaylistAtPosition(playlistId: Long, position: Int)
 
