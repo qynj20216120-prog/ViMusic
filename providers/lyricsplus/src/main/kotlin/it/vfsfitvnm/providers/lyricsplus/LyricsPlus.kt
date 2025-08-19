@@ -29,23 +29,39 @@ object LyricsPlus {
     ): List<LyricLine>? {
         val url = "$baseUrl/v2/lyrics/get"
 
-        return try {
+        try {
             // First attempt: Request lyrics with the album
-            makeLyricsRequest(url, title, artist, album)
+            val response = makeLyricsRequest(url, title, artist, album)
+
+            // Check if the response is valid but contains only line-level sync
+            val isLineLevelOnly = response.lyrics.isNotEmpty() && response.lyrics.all { it.syllabus.isEmpty() }
+
+            // If we got line-level sync and we used an album, try again without it
+            if (isLineLevelOnly && album != null) {
+                // Second attempt: Request lyrics without the album
+                val fallbackResponse = makeLyricsRequest(url, title, artist, null)
+                return mapResponseToLyricLines(fallbackResponse)
+            }
+
+            // If the first response was good (word-level or no album was used), return it
+            return mapResponseToLyricLines(response)
+
         } catch (e: ClientRequestException) {
             // If it fails with a 404 and an album was provided, try again without it
             if (e.response.status == HttpStatusCode.NotFound && album != null) {
-                try {
-                    // Second attempt: Request lyrics without the album
-                    makeLyricsRequest(url, title, artist, null)
+                return try {
+                    // Second attempt after 404: Request lyrics without the album
+                    val fallbackResponse = makeLyricsRequest(url, title, artist, null)
+                    mapResponseToLyricLines(fallbackResponse)
                 } catch (_: Exception) {
                     null // Return null if the second attempt also fails
                 }
             } else {
-                null // Return null for other HTTP errors
+                return null // Return null for other HTTP errors
             }
         } catch (_: Exception) {
-            null // Return null for any other type of exception (e.g., network issues)
+            // Return null for any other type of exception (e.g., network issues)
+            return null
         }
     }
 
@@ -54,19 +70,22 @@ object LyricsPlus {
         title: String,
         artist: String,
         album: String?
-    ): List<LyricLine> {
+    ): LyricsResponse {
         val response: HttpResponse = client.get(url) {
             parameter("title", title)
             parameter("artist", artist)
+            // Ktor ignores null parameters, so this is safe
             parameter("album", album)
         }
 
         val responseText = response.bodyAsText()
 
-        val body = Json { ignoreUnknownKeys = true }
+        return Json { ignoreUnknownKeys = true }
             .decodeFromString<LyricsResponse>(responseText)
+    }
 
-        return body.lyrics.map { line ->
+    private fun mapResponseToLyricLines(response: LyricsResponse): List<LyricLine> {
+        return response.lyrics.map { line ->
             LyricLine(
                 fullText = line.text,
                 startTimeMs = line.time,
