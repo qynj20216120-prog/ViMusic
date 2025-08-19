@@ -1,6 +1,7 @@
 package it.vfsfitvnm.vimusic.ui.screens.player
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,8 +15,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -27,7 +26,6 @@ import it.vfsfitvnm.core.ui.LocalAppearance
 import it.vfsfitvnm.providers.lyricsplus.LyricsPlusSyncManager
 import it.vfsfitvnm.vimusic.ui.modifiers.verticalFadingEdge
 import it.vfsfitvnm.vimusic.utils.center
-import it.vfsfitvnm.vimusic.utils.color
 import it.vfsfitvnm.vimusic.utils.medium
 import kotlinx.collections.immutable.toImmutableList
 
@@ -75,28 +73,37 @@ fun WordSyncedLyrics(manager: LyricsPlusSyncManager, modifier: Modifier = Modifi
 
         itemsIndexed(lyrics.toImmutableList()) { lineIndex, line ->
             val isActiveLine = lineIndex == currentLineIndex
+            // A line is considered "singing" if any of its words are currently active.
+            val isSingingLine = line.words.any { word -> currentPosition in word.startTimeMs..(word.startTimeMs + word.durationMs) }
 
             // Build an annotated string for the entire line to allow for text wrapping
-            val annotatedString = remember(line, currentLineIndex, currentPosition) {
-                buildAnnotatedString {
-                    line.words.forEach { word ->
-                        val isWordActive = currentPosition in word.startTimeMs..(word.startTimeMs + word.durationMs)
+            val annotatedString = buildAnnotatedString {
+                line.words.forEach { word ->
+                    val isWordActive = currentPosition in word.startTimeMs..(word.startTimeMs + word.durationMs)
+                    val isWordPast = currentPosition > (word.startTimeMs + word.durationMs)
 
-                        // Determine the color of each word based on its state
-                        val targetColor = when {
-                            // Any currently sung word in the active line
-                            isActiveLine && isWordActive -> Color.White
-                            // Words that have already been sung in the active line
-                            isActiveLine && currentPosition > (word.startTimeMs + word.durationMs) -> Color.White.copy(alpha = 0.8f)
-                            // Upcoming words in the active line
-                            isActiveLine -> Color.White.copy(alpha = 0.5f)
-                            // Words in any other line (past or future)
-                            else -> colorPalette.textDisabled
+                    // Determine the target color of each word based on its timing and line status.
+                    val targetColor = when {
+                        // If the line is currently being sung, apply full karaoke styling.
+                        isSingingLine -> {
+                            if (isWordActive || isWordPast) Color.White else Color.White.copy(alpha = 0.6f)
                         }
+                        // If it's the main centered line (but not yet singing), show it as upcoming.
+                        isActiveLine -> Color.White.copy(alpha = 0.6f)
 
-                        withStyle(style = SpanStyle(color = targetColor)) {
-                            append(word.text)
-                        }
+                        // Otherwise, the line is completely inactive.
+                        else -> colorPalette.textDisabled
+                    }
+
+                    // Animate the color change to prevent flickering
+                    val animatedColor by animateColorAsState(
+                        targetValue = targetColor,
+                        animationSpec = tween(durationMillis = 150), // A short animation to smooth the transition
+                        label = "wordColorAnimation"
+                    )
+
+                    withStyle(style = SpanStyle(color = animatedColor)) {
+                        append(word.text)
                     }
                 }
             }
