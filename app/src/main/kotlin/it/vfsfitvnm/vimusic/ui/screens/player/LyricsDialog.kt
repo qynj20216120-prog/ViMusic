@@ -1,5 +1,6 @@
 package it.vfsfitvnm.vimusic.ui.screens.player
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
@@ -36,6 +37,7 @@ import it.vfsfitvnm.core.ui.LocalAppearance
 import it.vfsfitvnm.core.ui.utils.px
 import coil3.compose.AsyncImage
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @Composable
 fun LyricsDialog(
     onDismiss: () -> Unit,
