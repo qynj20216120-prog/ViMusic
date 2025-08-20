@@ -475,7 +475,7 @@ fun LocalPlaylistSongs(
                                 }
                             )
                             .padding(18.dp)
-                            .size(20.dp),
+                            .size(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
@@ -520,7 +520,7 @@ fun LocalPlaylistSongs(
                                     }
                                 )
                                 .padding(18.dp)
-                                .size(20.dp),
+                                .size(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
@@ -556,7 +556,7 @@ fun LocalPlaylistSongs(
                                     }
                                 )
                                 .padding(18.dp)
-                                .size(20.dp),
+                                .size(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
