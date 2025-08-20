@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,40 +50,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
-import it.vfsfitvnm.vimusic.Database
-import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
-import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
-import it.vfsfitvnm.vimusic.R
-import it.vfsfitvnm.vimusic.models.Playlist
-import it.vfsfitvnm.vimusic.models.Song
-import it.vfsfitvnm.vimusic.models.SongPlaylistMap
-import it.vfsfitvnm.vimusic.preferences.DataPreferences
-import it.vfsfitvnm.vimusic.query
-import it.vfsfitvnm.vimusic.transaction
-import it.vfsfitvnm.vimusic.ui.components.LocalMenuState
-import it.vfsfitvnm.vimusic.ui.components.themed.CircularProgressIndicator
-import it.vfsfitvnm.vimusic.ui.components.themed.ConfirmationDialog
-import it.vfsfitvnm.vimusic.ui.components.themed.FloatingActionsContainerWithScrollToTop
-import it.vfsfitvnm.vimusic.ui.components.themed.Header
-import it.vfsfitvnm.vimusic.ui.components.themed.HeaderIconButton
-import it.vfsfitvnm.vimusic.ui.components.themed.InPlaylistMediaItemMenu
-import it.vfsfitvnm.vimusic.ui.components.themed.LayoutWithAdaptiveThumbnail
-import it.vfsfitvnm.vimusic.ui.components.themed.Menu
-import it.vfsfitvnm.vimusic.ui.components.themed.MenuEntry
-import it.vfsfitvnm.vimusic.ui.components.themed.ReorderHandle
-import it.vfsfitvnm.vimusic.ui.components.themed.SecondaryTextButton
-import it.vfsfitvnm.vimusic.ui.components.themed.TextFieldDialog
-import it.vfsfitvnm.vimusic.ui.items.SongItem
-import it.vfsfitvnm.vimusic.ui.screens.home.HeaderSongSortBy
-import it.vfsfitvnm.vimusic.utils.PlaylistDownloadIcon
-import it.vfsfitvnm.vimusic.utils.asMediaItem
-import it.vfsfitvnm.vimusic.utils.completed
-import it.vfsfitvnm.vimusic.utils.enqueue
-import it.vfsfitvnm.vimusic.utils.forcePlayAtIndex
-import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
-import it.vfsfitvnm.vimusic.utils.launchYouTubeMusic
-import it.vfsfitvnm.vimusic.utils.playingSong
-import it.vfsfitvnm.vimusic.utils.toast
 import it.vfsfitvnm.compose.persist.persistList
 import it.vfsfitvnm.compose.reordering.animateItemPlacement
 import it.vfsfitvnm.compose.reordering.draggedItem
@@ -96,6 +63,38 @@ import it.vfsfitvnm.core.ui.utils.isLandscape
 import it.vfsfitvnm.providers.innertube.Innertube
 import it.vfsfitvnm.providers.innertube.models.bodies.BrowseBody
 import it.vfsfitvnm.providers.innertube.requests.playlistPage
+import it.vfsfitvnm.vimusic.Database
+import it.vfsfitvnm.vimusic.LocalPlayerAwareWindowInsets
+import it.vfsfitvnm.vimusic.LocalPlayerServiceBinder
+import it.vfsfitvnm.vimusic.R
+import it.vfsfitvnm.vimusic.models.Playlist
+import it.vfsfitvnm.vimusic.models.Song
+import it.vfsfitvnm.vimusic.models.SongPlaylistMap
+import it.vfsfitvnm.vimusic.preferences.DataPreferences
+import it.vfsfitvnm.vimusic.query
+import it.vfsfitvnm.vimusic.transaction
+import it.vfsfitvnm.vimusic.ui.components.LocalMenuState
+import it.vfsfitvnm.vimusic.ui.components.themed.CircularProgressIndicator
+import it.vfsfitvnm.vimusic.ui.components.themed.ConfirmationDialog
+import it.vfsfitvnm.vimusic.ui.components.themed.Header
+import it.vfsfitvnm.vimusic.ui.components.themed.HeaderIconButton
+import it.vfsfitvnm.vimusic.ui.components.themed.InPlaylistMediaItemMenu
+import it.vfsfitvnm.vimusic.ui.components.themed.LayoutWithAdaptiveThumbnail
+import it.vfsfitvnm.vimusic.ui.components.themed.Menu
+import it.vfsfitvnm.vimusic.ui.components.themed.MenuEntry
+import it.vfsfitvnm.vimusic.ui.components.themed.ReorderHandle
+import it.vfsfitvnm.vimusic.ui.components.themed.TextFieldDialog
+import it.vfsfitvnm.vimusic.ui.items.SongItem
+import it.vfsfitvnm.vimusic.ui.screens.home.HeaderSongSortBy
+import it.vfsfitvnm.vimusic.utils.PlaylistDownloadIcon
+import it.vfsfitvnm.vimusic.utils.asMediaItem
+import it.vfsfitvnm.vimusic.utils.completed
+import it.vfsfitvnm.vimusic.utils.enqueue
+import it.vfsfitvnm.vimusic.utils.forcePlayAtIndex
+import it.vfsfitvnm.vimusic.utils.forcePlayFromBeginning
+import it.vfsfitvnm.vimusic.utils.launchYouTubeMusic
+import it.vfsfitvnm.vimusic.utils.playingSong
+import it.vfsfitvnm.vimusic.utils.toast
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -246,14 +245,6 @@ fun LocalPlaylistSongs(
                                 title = playlist.name,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             ) {
-                                SecondaryTextButton(
-                                    text = stringResource(R.string.enqueue),
-                                    enabled = filteredSongs.isNotEmpty(),
-                                    onClick = {
-                                        binder?.player?.enqueue(filteredSongs.map { it.asMediaItem })
-                                    }
-                                )
-
                                 Spacer(modifier = Modifier.weight(1f))
 
                                 AnimatedVisibility(loading) {
@@ -494,19 +485,135 @@ fun LocalPlaylistSongs(
             }
         }
 
-        FloatingActionsContainerWithScrollToTop(
-            lazyListState = lazyListState,
-            icon = R.drawable.shuffle,
-            visible = !reorderingState.isDragging,
-            onClick = {
-                if (filteredSongs.isEmpty()) return@FloatingActionsContainerWithScrollToTop
-
-                binder?.stopRadio()
-                binder?.player?.forcePlayFromBeginning(
-                    filteredSongs.shuffled().map { it.asMediaItem }
+        // Custom floating action buttons using existing square rounded UI style
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = 16.dp,
+                    bottom = 16.dp
                 )
+                .padding(LocalPlayerAwareWindowInsets.current.asPaddingValues())
+        ) {
+            Column(
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                // Enqueue floating button (top)
+                AnimatedVisibility(
+                    visible = !reorderingState.isDragging && filteredSongs.isNotEmpty(),
+                    enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                    exit = fadeOut() + androidx.compose.animation.scaleOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = colorPalette.background2,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                            )
+                            .combinedClickable(
+                                indication = null,
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                onClick = {
+                                    binder?.player?.enqueue(filteredSongs.map { it.asMediaItem })
+                                }
+                            )
+                            .padding(18.dp)
+                            .size(20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        androidx.compose.foundation.Image(
+                            painter = androidx.compose.ui.res.painterResource(R.drawable.enqueue),
+                            contentDescription = null,
+                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(colorPalette.text),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                // Bottom row: Shuffle button and Scroll to top button
+                Row(
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Scroll to top button (circular, appears when scrolled, left of shuffle)
+                    AnimatedVisibility(
+                        visible = remember {
+                            derivedStateOf {
+                                !reorderingState.isDragging &&
+                                    (lazyListState.firstVisibleItemIndex > 0 ||
+                                        lazyListState.firstVisibleItemScrollOffset > 0)
+                            }
+                        }.value,
+                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                        exit = fadeOut() + androidx.compose.animation.scaleOut()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = colorPalette.background2,
+                                    shape = CircleShape
+                                )
+                                .combinedClickable(
+                                    indication = null,
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            lazyListState.animateScrollToItem(0)
+                                        }
+                                    }
+                                )
+                                .padding(18.dp)
+                                .size(20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(R.drawable.chevron_up),
+                                contentDescription = null,
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(colorPalette.text),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    // Shuffle floating button (main button, always visible)
+                    AnimatedVisibility(
+                        visible = !reorderingState.isDragging,
+                        enter = fadeIn() + androidx.compose.animation.scaleIn(),
+                        exit = fadeOut() + androidx.compose.animation.scaleOut()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    color = colorPalette.background2,
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+                                )
+                                .combinedClickable(
+                                    indication = null,
+                                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                    onClick = {
+                                        if (filteredSongs.isEmpty()) return@combinedClickable
+                                        binder?.stopRadio()
+                                        binder?.player?.forcePlayFromBeginning(
+                                            filteredSongs.shuffled().map { it.asMediaItem }
+                                        )
+                                    }
+                                )
+                                .padding(18.dp)
+                                .size(20.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(R.drawable.shuffle),
+                                contentDescription = null,
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(colorPalette.text),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
             }
-        )
+        }
     }
 }
 
