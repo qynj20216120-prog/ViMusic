@@ -32,7 +32,11 @@ import it.vfsfitvnm.vimusic.utils.medium
 import kotlinx.collections.immutable.toImmutableList
 
 @Composable
-fun WordSyncedLyrics(manager: LyricsPlusSyncManager, modifier: Modifier = Modifier) {
+fun WordSyncedLyrics(
+    manager: LyricsPlusSyncManager,
+    modifier: Modifier = Modifier,
+    isVisible: Boolean = true
+) {
     val (colorPalette, typography) = LocalAppearance.current
 
     val lazyListState = rememberLazyListState()
@@ -45,10 +49,26 @@ fun WordSyncedLyrics(manager: LyricsPlusSyncManager, modifier: Modifier = Modifi
     // Remember the previous line index to prevent unnecessary scrolling
     val previousLineIndex = remember { mutableIntStateOf(-2) }
 
-    // This effect triggers when the current line changes, scrolling it to the center
+    // Effect to handle positioning when component becomes visible or current position changes significantly
+    LaunchedEffect(isVisible, currentLineIndex) {
+        if (isVisible) {
+            val targetIndex = if (currentLineIndex == -1) 0 else currentLineIndex
+
+            val viewHeight = lazyListState.layoutInfo.viewportSize.height
+            val itemHeight = lazyListState.layoutInfo.visibleItemsInfo
+                .firstOrNull { it.index == targetIndex + 1 }?.size ?: 0
+            val centerOffset = (viewHeight - itemHeight) / 2
+
+            // When becoming visible, immediately scroll to current position
+            lazyListState.animateScrollToItem(index = targetIndex + 1, scrollOffset = -centerOffset)
+            previousLineIndex.intValue = currentLineIndex
+        }
+    }
+
+    // This effect triggers when the current line changes during normal playback
     LaunchedEffect(currentLineIndex) {
-        // Only scroll if the line index has actually changed
-        if (currentLineIndex != previousLineIndex.intValue) {
+        // Only scroll if the line index has actually changed and component is visible
+        if (isVisible && currentLineIndex != previousLineIndex.intValue) {
             previousLineIndex.intValue = currentLineIndex
 
             // Use 0 as default when currentLineIndex is -1 (before song starts)

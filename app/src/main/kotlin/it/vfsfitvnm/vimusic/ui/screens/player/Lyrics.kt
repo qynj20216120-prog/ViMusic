@@ -687,7 +687,10 @@ fun Lyrics(
                         }
                     }
 
-                    WordSyncedLyrics(manager = wordSyncedManager!!)
+                    WordSyncedLyrics(
+                        manager = wordSyncedManager!!,
+                        isVisible = isDisplayed
+                    )
                 }
 
                 // Case 2: Line-level sync is parsed and ready
