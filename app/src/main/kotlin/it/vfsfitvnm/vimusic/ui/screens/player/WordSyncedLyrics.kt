@@ -15,6 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,19 +42,28 @@ fun WordSyncedLyrics(manager: LyricsPlusSyncManager, modifier: Modifier = Modifi
     val currentLineIndex by manager.currentLineIndex.collectAsState()
     val currentPosition by manager.currentPosition.collectAsState()
 
+    // Remember the previous line index to prevent unnecessary scrolling
+    val previousLineIndex = remember { mutableIntStateOf(-2) }
+
     // This effect triggers when the current line changes, scrolling it to the center
     LaunchedEffect(currentLineIndex) {
-        if (currentLineIndex >= 0) {
+        // Only scroll if the line index has actually changed
+        if (currentLineIndex != previousLineIndex.intValue) {
+            previousLineIndex.intValue = currentLineIndex
+
+            // Use 0 as default when currentLineIndex is -1 (before song starts)
+            val targetIndex = if (currentLineIndex == -1) 0 else currentLineIndex
+
             // Calculate the necessary offset to center the item in the viewport
             val viewHeight = lazyListState.layoutInfo.viewportSize.height
             // Find the specific item's height, default to 0 if not visible
             val itemHeight = lazyListState.layoutInfo.visibleItemsInfo
-                .firstOrNull { it.index == currentLineIndex + 1 }?.size ?: 0
+                .firstOrNull { it.index == targetIndex + 1 }?.size ?: 0
             val centerOffset = (viewHeight - itemHeight) / 2
 
             // Animate the scroll to the target item, applying the offset
             // We add 1 to the index to account for the initial Spacer item
-            lazyListState.animateScrollToItem(index = currentLineIndex + 1, scrollOffset = -centerOffset)
+            lazyListState.animateScrollToItem(index = targetIndex + 1, scrollOffset = -centerOffset)
         }
     }
 
@@ -72,7 +83,7 @@ fun WordSyncedLyrics(manager: LyricsPlusSyncManager, modifier: Modifier = Modifi
         }
 
         itemsIndexed(lyrics.toImmutableList()) { lineIndex, line ->
-            val isActiveLine = lineIndex == currentLineIndex
+            val isActiveLine = lineIndex == currentLineIndex || (currentLineIndex == -1 && lineIndex == 0)
             // A line is considered "singing" if any of its words are currently active.
             val isSingingLine = line.words.any { word -> currentPosition in word.startTimeMs..(word.startTimeMs + word.durationMs) }
 
@@ -98,7 +109,7 @@ fun WordSyncedLyrics(manager: LyricsPlusSyncManager, modifier: Modifier = Modifi
                     // Animate the color change to prevent flickering
                     val animatedColor by animateColorAsState(
                         targetValue = targetColor,
-                        animationSpec = tween(durationMillis = 150), // A short animation to smooth the transition
+                        animationSpec = tween(durationMillis = 300), // Increased duration for smoother transition
                         label = "wordColorAnimation"
                     )
 
