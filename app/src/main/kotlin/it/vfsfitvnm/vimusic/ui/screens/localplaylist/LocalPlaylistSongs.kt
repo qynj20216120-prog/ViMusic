@@ -284,7 +284,7 @@ fun LocalPlaylistSongs(
                                         style = typography.xs.secondary.semiBold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.fillMaxWidth(0.25f)
+                                        modifier = Modifier.fillMaxWidth(0.2825f)
                                     )
                                 }
                             }
