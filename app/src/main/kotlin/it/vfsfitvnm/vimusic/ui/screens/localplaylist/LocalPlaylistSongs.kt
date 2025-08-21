@@ -80,6 +80,7 @@ import it.vfsfitvnm.vimusic.models.Song
 import it.vfsfitvnm.vimusic.models.SongPlaylistMap
 import it.vfsfitvnm.vimusic.preferences.DataPreferences
 import it.vfsfitvnm.vimusic.query
+import it.vfsfitvnm.vimusic.service.PrecacheService
 import it.vfsfitvnm.vimusic.transaction
 import it.vfsfitvnm.vimusic.ui.components.LocalMenuState
 import it.vfsfitvnm.vimusic.ui.components.themed.CircularProgressIndicator
@@ -95,7 +96,6 @@ import it.vfsfitvnm.vimusic.ui.components.themed.TextField
 import it.vfsfitvnm.vimusic.ui.components.themed.TextFieldDialog
 import it.vfsfitvnm.vimusic.ui.items.SongItem
 import it.vfsfitvnm.vimusic.ui.screens.home.HeaderSongSortBy
-import it.vfsfitvnm.vimusic.utils.PlaylistDownloadIcon
 import it.vfsfitvnm.vimusic.utils.asMediaItem
 import it.vfsfitvnm.vimusic.utils.completed
 import it.vfsfitvnm.vimusic.utils.enqueue
@@ -294,10 +294,6 @@ fun LocalPlaylistSongs(
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp))
                             }
 
-                            PlaylistDownloadIcon(
-                                songs = filteredSongs.map { it.asMediaItem }.toImmutableList()
-                            )
-
                             // Add the sorting component
                             if (playlist.sortable) {
                                 HeaderSongSortBy(
@@ -314,6 +310,16 @@ fun LocalPlaylistSongs(
                                 onClick = {
                                     menuState.display {
                                         Menu {
+                                            MenuEntry(
+                                                icon = R.drawable.download,
+                                                text = stringResource(R.string.pre_cache),
+                                                onClick = {
+                                                    menuState.hide()
+                                                    filteredSongs.forEach { song ->
+                                                        PrecacheService.scheduleCache(context, song.asMediaItem)
+                                                    }
+                                                }
+                                            )
                                             playlist.browseId?.let { browseId ->
                                                 MenuEntry(
                                                     icon = R.drawable.sync,
