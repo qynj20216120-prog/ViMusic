@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -83,7 +84,6 @@ import it.vfsfitvnm.vimusic.query
 import it.vfsfitvnm.vimusic.service.PrecacheService
 import it.vfsfitvnm.vimusic.transaction
 import it.vfsfitvnm.vimusic.ui.components.LocalMenuState
-import it.vfsfitvnm.vimusic.ui.components.themed.CircularProgressIndicator
 import it.vfsfitvnm.vimusic.ui.components.themed.ConfirmationDialog
 import it.vfsfitvnm.vimusic.ui.components.themed.Header
 import it.vfsfitvnm.vimusic.ui.components.themed.HeaderIconButton
@@ -283,16 +283,13 @@ fun LocalPlaylistSongs(
                                         ),
                                         style = typography.xs.secondary.semiBold,
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.fillMaxWidth(0.25f)
                                     )
                                 }
                             }
 
                             Spacer(modifier = Modifier.weight(1f))
-
-                            AnimatedVisibility(loading) {
-                                CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                            }
 
                             // Add the sorting component
                             if (playlist.sortable) {
@@ -307,6 +304,7 @@ fun LocalPlaylistSongs(
                             HeaderIconButton(
                                 icon = R.drawable.ellipsis_horizontal,
                                 color = colorPalette.text,
+                                modifier = Modifier.size(24.dp),
                                 onClick = {
                                     menuState.display {
                                         Menu {
@@ -481,7 +479,7 @@ fun LocalPlaylistSongs(
                                 }
                             )
                             .padding(18.dp)
-                            .size(24.dp),
+                            .size(26.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Image(
@@ -496,7 +494,7 @@ fun LocalPlaylistSongs(
                 // Bottom row: Shuffle button and Scroll to top button
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Bottom
                 ) {
                     // Scroll to top button (circular, appears when scrolled, left of shuffle)
                     AnimatedVisibility(
@@ -526,7 +524,7 @@ fun LocalPlaylistSongs(
                                     }
                                 )
                                 .padding(18.dp)
-                                .size(24.dp),
+                                .size(16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
@@ -562,7 +560,7 @@ fun LocalPlaylistSongs(
                                     }
                                 )
                                 .padding(18.dp)
-                                .size(24.dp),
+                                .size(26.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Image(
