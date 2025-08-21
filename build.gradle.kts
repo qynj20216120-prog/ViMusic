@@ -13,13 +13,9 @@ plugins {
     alias(libs.plugins.detekt)
 }
 
-val clean by tasks.registering(Delete::class) {
-    delete(rootProject.layout.buildDirectory.asFile)
-}
-
 allprojects {
     group = "it.vfsfitvnm.vimusic"
-    version = "0.1.2"
+    version = "0.1.3"
 
     apply(plugin = "io.gitlab.arturbosch.detekt")
 
