@@ -154,7 +154,6 @@ interface Database {
             SortOrder.Descending -> if (isLocal) localSongsByTitleDesc() else songsByTitleDesc()
         }
 
-        // FIX 1: Added Position to this branch to make the 'when' exhaustive.
         SongSortBy.Position,
         SongSortBy.DateAdded -> when (sortOrder) {
             SortOrder.Ascending -> if (isLocal) localSongsByRowIdAsc() else songsByRowIdAsc()
@@ -200,7 +199,6 @@ interface Database {
             SortOrder.Descending -> favoritesByTitleDesc()
         }
 
-        // FIX 2: Added Position to this branch to make the 'when' exhaustive.
         SongSortBy.Position,
         SongSortBy.DateAdded -> when (sortOrder) {
             SortOrder.Ascending -> favoritesByLikedAtAsc()
@@ -301,7 +299,6 @@ interface Database {
     @Query("SELECT * FROM Album WHERE bookmarkedAt IS NOT NULL ORDER BY title COLLATE NOCASE ASC")
     fun albumsByTitleAsc(): Flow<List<Album>>
 
-    // authorsText as fallback for when YouTube showed the year in the artist field
     @Query("SELECT * FROM Album WHERE bookmarkedAt IS NOT NULL ORDER BY year ASC, authorsText COLLATE NOCASE ASC")
     fun albumsByYearAsc(): Flow<List<Album>>
 
@@ -343,8 +340,6 @@ interface Database {
     @Query("SELECT * FROM Playlist WHERE id = :id")
     fun playlist(id: Long): Flow<Playlist?>
 
-    // FIX 4: Re-implemented playlistSongs to support dynamic sorting.
-    // It now calls private helper functions with the correct SQL query.
     fun playlistSongs(id: Long, sortBy: SongSortBy, sortOrder: SortOrder): Flow<List<Song>?> {
         return when (sortBy) {
             SongSortBy.Position -> when (sortOrder) {
@@ -366,7 +361,6 @@ interface Database {
         }
     }
 
-    // FIX 4: Helper functions for playlistSongs
     @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY SongPlaylistMap.position ASC")
     fun _playlistSongsByPositionAsc(id: Long): Flow<List<Song>?>
 
@@ -390,7 +384,6 @@ interface Database {
 
     @Transaction @Query("SELECT Song.* FROM SongPlaylistMap INNER JOIN Song on Song.id = SongPlaylistMap.songId WHERE playlistId = :id ORDER BY Song.totalPlayTimeMs DESC")
     fun _playlistSongsByPlayTimeDesc(id: Long): Flow<List<Song>?>
-
 
     @Transaction
     @Query("SELECT * FROM Playlist WHERE id = :id")
@@ -595,7 +588,6 @@ interface Database {
             SortOrder.Descending -> songsWithContentLengthByTitleDesc()
         }
 
-        // FIX 3: Added Position to this branch to make the 'when' exhaustive.
         SongSortBy.Position,
         SongSortBy.DateAdded -> when (sortOrder) {
             SortOrder.Ascending -> songsWithContentLengthByRowIdAsc()
@@ -741,12 +733,6 @@ interface Database {
     fun insert(songPlaylistMap: SongPlaylistMap): Long
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
-    fun insert(songArtistMap: SongArtistMap): Long
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    fun insert(song: Song): Long
-
-    @Insert(onConflict = OnConflictStrategy.ABORT)
     fun insert(queuedMediaItems: List<QueuedMediaItem>)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -771,9 +757,9 @@ interface Database {
             durationText = extras?.durationText,
             thumbnailUrl = mediaItem.mediaMetadata.artworkUri?.toString(),
             explicit = extras?.explicit == true
-        ).let(block).also { song ->
-            if (insert(song) == -1L) return
-        }
+        ).let(block)
+
+        upsert(song) // Use the new upsert method
 
         extras?.albumId?.let { albumId ->
             insert(
@@ -819,6 +805,13 @@ interface Database {
 
     @Upsert
     fun upsert(artist: Artist)
+
+    // FIX: Add the missing upsert methods
+    @Upsert
+    fun upsert(song: Song)
+
+    @Upsert
+    fun upsert(songArtistMap: SongArtistMap)
 
     @Delete
     fun delete(song: Song)
@@ -1167,7 +1160,6 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
 
     class From31To32Migration : Migration(31, 32) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // Create a new table with the correct schema
             db.execSQL("""
                 CREATE TABLE SongPlaylistMap_new (
                     `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -1178,16 +1170,12 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
                     FOREIGN KEY(`playlistId`) REFERENCES `Playlist`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
                 )
             """.trimIndent())
-            // Copy the data from the old table to the new one
             db.execSQL("""
                 INSERT INTO SongPlaylistMap_new (songId, playlistId, position)
                 SELECT songId, playlistId, position FROM SongPlaylistMap
             """.trimIndent())
-            // Remove the old table
             db.execSQL("DROP TABLE SongPlaylistMap")
-            // Rename the new table to the original name
             db.execSQL("ALTER TABLE SongPlaylistMap_new RENAME TO SongPlaylistMap")
-            // Re-create indices for performance
             db.execSQL("CREATE INDEX `index_SongPlaylistMap_songId` ON `SongPlaylistMap` (`songId`)")
             db.execSQL("CREATE INDEX `index_SongPlaylistMap_playlistId` ON `SongPlaylistMap` (`playlistId`)")
         }
@@ -1195,7 +1183,6 @@ abstract class DatabaseInitializer protected constructor() : RoomDatabase() {
 
     class From32To33Migration : Migration(32, 33) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            // Add the 'sortable' column to the 'Playlist' table
             db.execSQL("ALTER TABLE Playlist ADD COLUMN sortable INTEGER NOT NULL DEFAULT 1")
         }
     }

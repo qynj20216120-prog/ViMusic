@@ -153,5 +153,5 @@ fun Context.musicFilesAsFlow(): StateFlow<List<Song>> = flow {
         delay(5.seconds)
     }
 }.distinctUntilChanged()
-    .onEach { songs -> transaction { songs.forEach(Database.instance::insert) } }
+    .onEach { songs -> transaction { songs.forEach { song -> Database.instance.upsert(song) } } }
     .stateIn(mediaScope, SharingStarted.Eagerly, listOf())

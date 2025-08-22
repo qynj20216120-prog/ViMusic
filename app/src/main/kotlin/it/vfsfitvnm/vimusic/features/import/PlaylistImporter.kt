@@ -5,6 +5,8 @@ import it.vfsfitvnm.vimusic.Database
 import it.vfsfitvnm.vimusic.models.Playlist
 import it.vfsfitvnm.vimusic.models.Song
 import it.vfsfitvnm.vimusic.models.SongPlaylistMap
+import it.vfsfitvnm.vimusic.models.Artist
+import it.vfsfitvnm.vimusic.models.SongArtistMap
 import it.vfsfitvnm.vimusic.transaction
 import it.vfsfitvnm.providers.innertube.Innertube
 import it.vfsfitvnm.providers.innertube.models.bodies.SearchBody
@@ -62,7 +64,7 @@ class PlaylistImporter {
     ) {
         try {
             val totalTracks = songList.size
-            val songsToAdd = mutableListOf<Song>()
+            val songsToAdd = mutableListOf<Pair<Song, List<Innertube.Info<it.vfsfitvnm.providers.innertube.models.NavigationEndpoint.Endpoint.Browse>>>>()
             val failedTracks = mutableListOf<SongImportInfo>()
             var processedCount = 0
 
@@ -87,21 +89,54 @@ class PlaylistImporter {
 
                             val bestMatch = findBestMatchInResults(track, searchCandidates)
                             bestMatch?.let {
+                                // Extract artist information with IDs
+                                val artistsWithEndpoints = it.authors?.let { authors ->
+                                    val itemsWithEndpoints = authors.filter { author ->
+                                        val name = author.name?.trim() ?: ""
+                                        author.endpoint != null &&
+                                            name.isNotEmpty() &&
+                                            name != " • " &&
+                                            !name.contains(":")
+                                    }
+
+                                    if (itemsWithEndpoints.size > 1) {
+                                        itemsWithEndpoints.dropLast(1)
+                                    } else {
+                                        itemsWithEndpoints
+                                    }
+                                } ?: emptyList()
+
+                                val artistsText = when (artistsWithEndpoints.size) {
+                                    0 -> ""
+                                    1 -> artistsWithEndpoints[0].name.toString().trim()
+                                    2 -> "${artistsWithEndpoints[0].name.toString().trim()} & ${artistsWithEndpoints[1].name.toString().trim()}"
+                                    else -> {
+                                        val allButLast = artistsWithEndpoints.dropLast(1).joinToString(", ") { it.name.toString().trim() }
+                                        val last = artistsWithEndpoints.last().name.toString().trim()
+                                        "$allButLast & $last"
+                                    }
+                                }
+
                                 Song(
                                     id = it.info?.endpoint?.videoId ?: "",
                                     title = it.info?.name ?: "",
-                                    artistsText = it.authors?.joinToString { author -> author.name.toString() } ?: "",
+                                    artistsText = artistsText,
                                     durationText = it.durationText,
                                     thumbnailUrl = it.thumbnail?.url,
                                     album = it.album?.name
-                                )
+                                ) to artistsWithEndpoints
                             }
                         }
                     }
                     val results = deferredSongsInBatch.awaitAll()
-                    batch.zip(results).forEach { (originalTrack, resultingSong) ->
-                        if (resultingSong != null && resultingSong.id.isNotBlank()) {
-                            songsToAdd.add(resultingSong)
+                    batch.zip(results).forEach { (originalTrack, result) ->
+                        if (result != null) {
+                            val (song, artistsWithEndpoints) = result
+                            if (song.id.isNotBlank()) {
+                                songsToAdd.add(song to artistsWithEndpoints)
+                            } else {
+                                failedTracks.add(originalTrack)
+                            }
                         } else {
                             failedTracks.add(originalTrack)
                         }
@@ -117,8 +152,30 @@ class PlaylistImporter {
                     val newPlaylist = Playlist(name = playlistName)
                     val newPlaylistId = Database.instance.insert(newPlaylist)
                     if (newPlaylistId != -1L) {
-                        songsToAdd.forEachIndexed { index, song ->
-                            Database.instance.insert(song)
+                        songsToAdd.forEachIndexed { index, (song, artistsWithEndpoints) ->
+                            // Use upsert to handle duplicates without crashing
+                            Database.instance.upsert(song)
+
+                            artistsWithEndpoints.forEach { artistInfo ->
+                                val artistId = artistInfo.endpoint?.browseId
+                                val artistName = artistInfo.name
+                                if (artistId != null && artistName != null) {
+                                    Database.instance.upsert(
+                                        Artist(
+                                            id = artistId,
+                                            name = artistName
+                                        )
+                                    )
+                                    // Use upsert to handle duplicate song-artist relationships
+                                    Database.instance.upsert(
+                                        SongArtistMap(
+                                            songId = song.id,
+                                            artistId = artistId
+                                        )
+                                    )
+                                }
+                            }
+
                             Database.instance.insert(
                                 SongPlaylistMap(
                                     songId = song.id,
