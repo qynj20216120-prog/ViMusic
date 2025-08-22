@@ -502,6 +502,12 @@ class PlayerService : InvincibleService(), Player.Listener, PlaybackStatsListene
 
         mediaItemState.update { mediaItem }
 
+        mediaItem?.let { newItem ->
+            coroutineScope.launch {
+                Database.instance.insert(newItem)
+            }
+        }
+
         maybeRecoverPlaybackError()
         maybeNormalizeVolume()
         maybeProcessRadio()
